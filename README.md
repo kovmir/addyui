@@ -6,6 +6,11 @@
 
 ![addyui demo](vhs/demo.gif)
 
+# DEPENDENCIES
+
+* [Go](https://go.dev/)
+* [Make](https://www.gnu.org/software/make/)
+
 # INSTALL
 
 ```sh
