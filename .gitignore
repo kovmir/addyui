@@ -1,0 +1,18 @@
+# Compiled binaries
+/addyui
+/cmd/addyui/addyui
+/mockaddy
+/cmd/mockaddy/mockaddy
+*.exe
+
+# Test and coverage output
+*.out
+*.test
+
+# Generated code should never be committed... except gen.go, which we do commit.
+# (oapi-codegen output in internal/api/gen.go is committed on purpose.)
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
