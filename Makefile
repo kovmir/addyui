@@ -4,9 +4,9 @@ build:
 install:
 	go install ./cmd/addyui
 
-# Record the README demo GIF: builds the TUI and a mock addy.io API server,
-# starts the mock, runs the scripted VHS tape, then stops the mock.
-# Requires vhs (github.com/charmbracelet/vhs) on PATH.
+test:
+	go test ./...
+
 demo: build
 	go build -o mockaddy ./cmd/mockaddy
 	./mockaddy -addr 127.0.0.1:18099 & \
