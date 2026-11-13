@@ -21,7 +21,7 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - formats: [tar.gz]
+  - formats: [tar.zst]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
