@@ -7,14 +7,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const helpText = `ALIAS LIST     enter details · c create · R recipients · space toggle active · p pin · d delete
-               x forget (twice) · f pin filter · v state filter · / search
-               r refetch · h/l or arrows page · esc back · q quit
-ALIAS DETAILS  j/k interactive row · J/K scroll · space act on row · p/n prev/next alias · esc back · q quit
-NEW ALIAS      space edit field · enter submit · esc back · q quit
-RECIPIENT LIST enter details · c create · x delete (twice) · f verified filter · r refetch · esc back · q quit
+const helpText = `ALIAS LIST        enter details · c create · R recipients · space toggle active · p pin · d delete
+                  x forget (twice) · f pin filter · v state filter · / search
+                  r refetch · h/l or arrows page · esc back · q quit
+
+ALIAS DETAILS     j/k interactive row · J/K scroll · space act on row · p/n prev/next alias · esc back · q quit
+
+NEW ALIAS         space edit field · enter submit · esc back · q quit
+
+RECIPIENT LIST    enter details · c create · x delete (twice) · f verified filter · r refetch · esc back · q quit
+
 RECIPIENT DETAILS j/k interactive row · J/K scroll · space act on row · p/n prev/next recipient
-               space on Aliases opens its alias list · esc back · q quit`
+                  space on Aliases opens its alias list · esc back · q quit`
 
 type HelpModel struct {
 	vp viewport.Model
