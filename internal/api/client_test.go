@@ -97,8 +97,8 @@ func TestClientDecodesResponses(t *testing.T) {
 	if recipients.JSON200 == nil || recipients.JSON200.Data == nil {
 		t.Fatalf("GetAllRecipients: expected 200 with data, got %s", recipients.Status())
 	}
-	if len(*recipients.JSON200.Data) != 2 {
-		t.Errorf("recipients = %d entries, want 2", len(*recipients.JSON200.Data))
+	if len(*recipients.JSON200.Data) != 3 {
+		t.Errorf("recipients = %d entries, want 3", len(*recipients.JSON200.Data))
 	}
 	if got := strVal((*recipients.JSON200.Data)[0].Email); got != "me@example.com" {
 		t.Errorf("first recipient email = %q, want \"me@example.com\"", got)

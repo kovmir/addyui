@@ -49,10 +49,16 @@ func NewAppModelWithView(client *api.ClientWithResponses, activeView views.ViewI
 	return AppModel{
 		active: activeView,
 		views: map[views.ViewID]tea.Model{
-			views.ViewList:    views.NewListModel(client, o.searchTerm, o.listFilter),
-			views.ViewDetails: views.NewDetailsModel(client),
-			views.ViewCreate:  views.NewCreateModel(client),
-			views.ViewHelp:    views.NewHelpModel(),
+			views.ViewList:             views.NewListModel(client, o.searchTerm, o.listFilter),
+			views.ViewDetails:          views.NewDetailsModel(client),
+			views.ViewCreate:           views.NewCreateModel(client),
+			views.ViewHelp:             views.NewHelpModel(),
+			views.ViewRecipientList:    views.NewRecipientListModel(client),
+			views.ViewRecipientDetails: views.NewRecipientDetailsModel(client),
+			// The alias list of one recipient gets its own model
+			// instance, so the recipient filter cannot leak into the
+			// plain alias list screen.
+			views.ViewRecipientAliases: views.NewListModel(client, "", views.StateActiveInactive),
 		},
 	}
 }

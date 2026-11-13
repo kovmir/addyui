@@ -13,6 +13,7 @@ package mockaddy
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -31,10 +32,24 @@ const DefaultAliasFormat = "random_words"
 
 const defaultUserID = "ca0a4e09-c266-4f6f-845c-958db5090f09"
 
-// Recipient is a verified recipient mail can be forwarded to.
+// Recipient is a recipient mail can be forwarded to.
 type Recipient struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
+
+	Description         *string `json:"description"`
+	Active              bool    `json:"active"`
+	EmailVerifiedAt     *string `json:"email_verified_at"`
+	AliasesCount        int     `json:"aliases_count"` // Computed at serve time.
+	CanReplySend        bool    `json:"can_reply_send"`
+	Fingerprint         *string `json:"fingerprint"`
+	ShouldEncrypt       bool    `json:"should_encrypt"`
+	InlineEncryption    bool    `json:"inline_encryption"`
+	ProtectedHeaders    bool    `json:"protected_headers"`
+	RemovePgpKeys       bool    `json:"remove_pgp_keys"`
+	RemovePgpSignatures bool    `json:"remove_pgp_signatures"`
+	CreatedAt           string  `json:"created_at"`
+	UpdatedAt           string  `json:"updated_at"`
 }
 
 // Alias mirrors the subset of the addy.io Alias model the TUI reads.
@@ -93,6 +108,11 @@ type listMeta struct {
 // recipientsResponse wraps the verified recipients list.
 type recipientsResponse struct {
 	Data []Recipient `json:"data"`
+}
+
+// recipientResponse wraps a single recipient in a "data" envelope.
+type recipientResponse struct {
+	Data Recipient `json:"data"`
 }
 
 // singleResponse wraps a single alias or object in a "data" envelope.
@@ -172,6 +192,50 @@ func New(opts ...Option) *Server {
 
 	// Verified recipients: GET /api/v1/recipients
 	mux.HandleFunc("GET /api/v1/recipients", s.listRecipients)
+
+	// Recipient management: details, create, delete, update.
+	mux.HandleFunc("GET /api/v1/recipients/{id}", s.getRecipient)
+	mux.HandleFunc("POST /api/v1/recipients", s.createRecipient)
+	mux.HandleFunc("DELETE /api/v1/recipients/{id}", s.deleteRecipient)
+	mux.HandleFunc("PATCH /api/v1/recipients/{id}", s.updateRecipient)
+
+	// Resend the verification email.
+	mux.HandleFunc("POST /api/v1/recipients/email/resend", s.resendRecipientVerification)
+
+	// Recipient toggles: the POST form enables, the DELETE form
+	// disables.
+	mux.HandleFunc("POST /api/v1/active-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.Active = true }))
+	mux.HandleFunc("DELETE /api/v1/active-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.Active = false }))
+	mux.HandleFunc("POST /api/v1/allowed-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.CanReplySend = true }))
+	mux.HandleFunc("DELETE /api/v1/allowed-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.CanReplySend = false }))
+	mux.HandleFunc("POST /api/v1/encrypted-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.ShouldEncrypt = true }))
+	mux.HandleFunc("DELETE /api/v1/encrypted-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.ShouldEncrypt = false }))
+	mux.HandleFunc("POST /api/v1/inline-encrypted-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.InlineEncryption = true }))
+	mux.HandleFunc("DELETE /api/v1/inline-encrypted-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.InlineEncryption = false }))
+	mux.HandleFunc("POST /api/v1/protected-headers-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.ProtectedHeaders = true }))
+	mux.HandleFunc("DELETE /api/v1/protected-headers-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.ProtectedHeaders = false }))
+	mux.HandleFunc("POST /api/v1/remove-pgp-keys-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.RemovePgpKeys = true }))
+	mux.HandleFunc("DELETE /api/v1/remove-pgp-keys-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.RemovePgpKeys = false }))
+	mux.HandleFunc("POST /api/v1/remove-pgp-signatures-recipients",
+		s.recipientTogglePost(func(rec *Recipient) { rec.RemovePgpSignatures = true }))
+	mux.HandleFunc("DELETE /api/v1/remove-pgp-signatures-recipients/{id}",
+		s.recipientToggleDelete(func(rec *Recipient) { rec.RemovePgpSignatures = false }))
+
+	// PGP public key management.
+	mux.HandleFunc("PATCH /api/v1/recipient-keys/{id}", s.addRecipientKey)
+	mux.HandleFunc("DELETE /api/v1/recipient-keys/{id}", s.removeRecipientKey)
 
 	// Domain options: GET /api/v1/domain-options
 	mux.HandleFunc("GET /api/v1/domain-options", s.domainOptions)
@@ -272,19 +336,32 @@ func demoAliases() []Alias {
 
 func demoRecipients() []Recipient {
 	return []Recipient{
-		{ID: "11111111-1111-4111-8111-111111111111", Email: "me@example.com"},
-		{ID: "22222222-2222-4222-8222-222222222222", Email: "backup@example.org"},
+		{
+			ID: "11111111-1111-4111-8111-111111111111", Email: "me@example.com",
+			Active: true, EmailVerifiedAt: new("2025-01-01 09:00:00"),
+			CanReplySend: true, CreatedAt: ts(-100), UpdatedAt: ts(-50),
+		},
+		{
+			ID: "22222222-2222-4222-8222-222222222222", Email: "backup@example.org",
+			Active: true, EmailVerifiedAt: new("2025-02-01 09:00:00"),
+			CanReplySend: true, CreatedAt: ts(-90), UpdatedAt: ts(-40),
+		},
+		{
+			// Unverified: the verification email was never confirmed.
+			ID: "33333333-3333-4333-8333-333333333333", Email: "pending@example.net",
+			Active: true, CreatedAt: ts(-2), UpdatedAt: ts(-2),
+		},
 	}
 }
 
 // filterAliases applies the query-string filters the TUI sends: search
-// term, deleted-state and active-state. Pagination is ignored (the demo
-// set fits on one page) but meta still reports sane values.
+// term, deleted-state, active-state and recipient.
 func (s *Server) filterAliases(r *http.Request) []Alias {
 	q := r.URL.Query()
 	search := q.Get("filter[search]")
 	deleted := q.Get("filter[deleted]") // "with", "only" or empty
 	active := q.Get("filter[active]")   // "true", "false" or empty
+	recipient := q.Get("recipient")     // recipient ID or empty
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -308,9 +385,23 @@ func (s *Server) filterAliases(r *http.Request) []Alias {
 		if active == "false" && a.Active {
 			continue
 		}
+		if recipient != "" && !aliasHasRecipient(a, recipient) {
+			continue
+		}
 		out = append(out, a)
 	}
 	return out
+}
+
+// aliasHasRecipient reports whether the alias is attached to the
+// recipient with the given ID.
+func aliasHasRecipient(a Alias, recipientID string) bool {
+	for _, r := range a.Recipients {
+		if r.ID == recipientID {
+			return true
+		}
+	}
+	return false
 }
 
 func strVal(s *string) string {
@@ -404,10 +495,221 @@ func (s *Server) deactivateAlias(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
 }
 
-func (s *Server) listRecipients(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) listRecipients(w http.ResponseWriter, r *http.Request) {
+	verified := r.URL.Query().Get("filter[verified]") // "true", "false" or empty
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	writeJSON(w, http.StatusOK, recipientsResponse{Data: s.recipients})
+	data := make([]Recipient, 0, len(s.recipients))
+	for _, rec := range s.recipients {
+		if verified == "true" && rec.EmailVerifiedAt == nil {
+			continue
+		}
+		if verified == "false" && rec.EmailVerifiedAt != nil {
+			continue
+		}
+		rec.AliasesCount = s.recipientAliasCountLocked(rec.ID)
+		data = append(data, rec)
+	}
+	writeJSON(w, http.StatusOK, recipientsResponse{Data: data})
+}
+
+// recipientAliasCountLocked counts the aliases attached to the
+// recipient; the caller must hold s.mu.
+func (s *Server) recipientAliasCountLocked(recipientID string) int {
+	n := 0
+	for _, a := range s.aliases {
+		if aliasHasRecipient(a, recipientID) {
+			n++
+		}
+	}
+	return n
+}
+
+// getRecipient answers GET /api/v1/recipients/{id}.
+func (s *Server) getRecipient(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == id {
+			rec := s.recipients[i]
+			rec.AliasesCount = s.recipientAliasCountLocked(id)
+			writeJSON(w, http.StatusOK, recipientResponse{Data: rec})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// createRecipient answers POST /api/v1/recipients, adding an unverified
+// recipient email address.
+func (s *Server) createRecipient(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "missing recipient email"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec := Recipient{
+		ID:        fmt.Sprintf("new-%d", len(s.recipients)+1),
+		Email:     body.Email,
+		Active:    true,
+		CreatedAt: ts(0),
+		UpdatedAt: ts(0),
+	}
+	s.recipients = append(s.recipients, rec)
+	writeJSON(w, http.StatusCreated, recipientResponse{Data: rec})
+}
+
+// deleteRecipient answers DELETE /api/v1/recipients/{id}, removing the
+// recipient permanently.
+func (s *Server) deleteRecipient(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == id {
+			s.recipients = append(s.recipients[:i], s.recipients[i+1:]...)
+			writeJSON(w, http.StatusNoContent, nil)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// updateRecipient answers PATCH /api/v1/recipients/{id}, setting the
+// description.
+func (s *Server) updateRecipient(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Description *string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "invalid body"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == id {
+			if body.Description != nil {
+				s.recipients[i].Description = body.Description
+				s.recipients[i].UpdatedAt = ts(0)
+			}
+			writeJSON(w, http.StatusOK, recipientResponse{Data: s.recipients[i]})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// resendRecipientVerification answers POST /api/v1/recipients/email/resend.
+func (s *Server) resendRecipientVerification(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RecipientID string `json:"recipient_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RecipientID == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "missing recipient id"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == body.RecipientID {
+			writeJSON(w, http.StatusOK, recipientResponse{Data: s.recipients[i]})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// recipientTogglePost answers a POST /api/v1/<thing> endpoint whose
+// body names the recipient, applying set to it.
+func (s *Server) recipientTogglePost(set func(*Recipient)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "missing recipient id"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.recipients {
+			if s.recipients[i].ID == body.ID {
+				set(&s.recipients[i])
+				s.recipients[i].UpdatedAt = ts(0)
+				writeJSON(w, http.StatusOK, recipientResponse{Data: s.recipients[i]})
+				return
+			}
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+	}
+}
+
+// recipientToggleDelete answers a DELETE /api/v1/<thing>/{id} endpoint,
+// applying set to the named recipient.
+func (s *Server) recipientToggleDelete(set func(*Recipient)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.recipients {
+			if s.recipients[i].ID == id {
+				set(&s.recipients[i])
+				s.recipients[i].UpdatedAt = ts(0)
+				writeJSON(w, http.StatusNoContent, nil)
+				return
+			}
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+	}
+}
+
+// addRecipientKey answers POST /api/v1/recipient-keys/{id}, storing the
+// key with a mock fingerprint.
+func (s *Server) addRecipientKey(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		KeyData string `json:"key_data"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.KeyData == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "missing key data"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == id {
+			fingerprint := "MOCK" + id[:min(8, len(id))]
+			s.recipients[i].Fingerprint = &fingerprint
+			s.recipients[i].UpdatedAt = ts(0)
+			writeJSON(w, http.StatusOK, recipientResponse{Data: s.recipients[i]})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// removeRecipientKey answers DELETE /api/v1/recipient-keys/{id}.
+func (s *Server) removeRecipientKey(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.recipients {
+		if s.recipients[i].ID == id {
+			s.recipients[i].Fingerprint = nil
+			s.recipients[i].UpdatedAt = ts(0)
+			writeJSON(w, http.StatusNoContent, nil)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
 }
 
 func (s *Server) domainOptions(w http.ResponseWriter, _ *http.Request) {

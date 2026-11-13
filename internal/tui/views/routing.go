@@ -11,6 +11,9 @@ const (
 	ViewDetails
 	ViewCreate
 	ViewHelp
+	ViewRecipientList
+	ViewRecipientDetails
+	ViewRecipientAliases
 )
 
 // SwitchViewMsg asks the root model to activate another view, pushing the

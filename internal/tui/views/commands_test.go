@@ -30,14 +30,14 @@ func TestFetchVerifiedRecipients(t *testing.T) {
 	t.Parallel()
 
 	client := newTestClient(t, mockaddy.WithRecipients([]mockaddy.Recipient{
-		{ID: "r1", Email: "a@example.com"},
-		{ID: "r2", Email: "b@example.com"},
+		{ID: "r1", Email: "a@example.com", EmailVerifiedAt: new("2026-01-01 00:00:00")},
+		{ID: "r2", Email: "b@example.com", EmailVerifiedAt: new("2026-01-01 00:00:00")},
 	}))
 
 	msg := fetchVerifiedRecipients(client)() // run the tea.Cmd
-	loaded, ok := msg.(recipientsLoadedMsg)
+	loaded, ok := msg.(verifiedRecipientsLoadedMsg)
 	if !ok {
-		t.Fatalf("command produced %T, want recipientsLoadedMsg", msg)
+		t.Fatalf("command produced %T, want verifiedRecipientsLoadedMsg", msg)
 	}
 	if loaded.err != nil {
 		t.Fatalf("recipientsLoadedMsg error = %v", loaded.err)

@@ -96,6 +96,14 @@ type listCursorMsg struct{ index int }
 // changed the alias, so the list reflects those changes.
 type listRefreshMsg struct{ index int }
 
+// listForRecipientMsg restricts the alias list to the aliases attached
+// to one recipient. The recipient details screen sends it when the user
+// opens the alias list from the "Aliases" row.
+type listForRecipientMsg struct {
+	recipientID string
+	email       string
+}
+
 // ListModel is the alias list screen.
 type ListModel struct {
 	client  *api.ClientWithResponses
@@ -115,6 +123,10 @@ type ListModel struct {
 
 	pinFilter   pinFilter
 	stateFilter StateFilter
+
+	// Non-empty: only show the aliases attached to this recipient.
+	recipientFilter string
+	recipientEmail  string // Recipient email shown in the status line.
 
 	searchTerm  string // Server-side search term.
 	searching   bool   // Whether the search field is active.
@@ -227,6 +239,9 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Create a new alias.
 		case "c":
 			return m, SwitchView(ViewCreate)
+		// Manage recipients.
+		case "R":
+			return m, SwitchView(ViewRecipientList)
 		// Next API alias page.
 		case "right", "l":
 			if m.page < m.lastPage {
@@ -311,6 +326,11 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.forgetArm = false
 		m.aliases = msg.aliases
 		m.table.SetRows(aliasRows(msg.aliases))
+		// Keep the cursor position across refetches, but clamp it back
+		// into range when the page shrank or had no rows yet.
+		if c := m.table.Cursor(); c < 0 || c >= len(m.aliases) {
+			m.table.SetCursor(0)
+		}
 		m.page = msg.page
 		m.lastPage = msg.lastPage
 		m.total = msg.total
@@ -321,6 +341,14 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case listRefreshMsg:
 		m.table.SetCursor(msg.index)
 		return m, m.fetchAliases()
+
+	case listForRecipientMsg:
+		// Init() runs right after this message and kicks off the
+		// filtered fetch, so no command is returned here. The cursor
+		// is left alone: with no rows yet, SetCursor would clamp to -1.
+		m.recipientFilter = msg.recipientID
+		m.recipientEmail = msg.email
+		m.page = 1
 
 	case actionDoneMsg:
 		if msg.err != nil {
@@ -372,6 +400,9 @@ func (m ListModel) View() tea.View {
 			fmt.Fprintf(&b, " (%d total)", m.total)
 		}
 		fmt.Fprintf(&b, " - view: %s - pins: %s", m.stateFilter.label(), m.pinFilter.label())
+		if m.recipientFilter != "" {
+			fmt.Fprintf(&b, " - recipient: %s", m.recipientEmail)
+		}
 		if m.searchTerm != "" {
 			fmt.Fprintf(&b, " - search: %q", m.searchTerm)
 		}
@@ -453,6 +484,12 @@ func (m ListModel) fetchAliases() tea.Cmd {
 		// them without another API call.
 		with := "recipients"
 		params.With = &with
+
+		// Restrict the list to one recipient's aliases when the
+		// recipient details screen asked for it.
+		if m.recipientFilter != "" {
+			params.Recipient = &m.recipientFilter
+		}
 
 		resp, err := m.client.GetAllAliasesWithResponse(ctx, params)
 		if err != nil {

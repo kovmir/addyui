@@ -179,7 +179,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.syncRows()
 
-	case recipientsLoadedMsg:
+	case verifiedRecipientsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil

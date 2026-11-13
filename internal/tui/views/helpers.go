@@ -52,6 +52,14 @@ func count(n *int) string {
 	return fmt.Sprintf("%d", *n)
 }
 
+// intVal dereferences an optional integer field, defaulting to zero.
+func intVal(n *int) int {
+	if n == nil {
+		return 0
+	}
+	return *n
+}
+
 // describeError returns a short, human-readable messages matching API errors.
 func describeError(err error) string {
 	urlErr, ok := errors.AsType[*url.Error](err)
