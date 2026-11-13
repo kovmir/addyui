@@ -1,7 +1,12 @@
 package views
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"syscall"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/lipgloss/v2"
@@ -45,4 +50,33 @@ func count(n *int) string {
 		return ""
 	}
 	return fmt.Sprintf("%d", *n)
+}
+
+// describeError returns a short, human-readable messages matching API errors.
+func describeError(err error) string {
+	urlErr, ok := errors.AsType[*url.Error](err)
+	if !ok {
+		return err.Error()
+	}
+	host := hostOf(urlErr.URL)
+
+	switch {
+	case errors.Is(urlErr.Err, context.DeadlineExceeded):
+		return fmt.Sprintf("request timed out — is %s reachable?", host)
+	case errors.Is(urlErr.Err, syscall.ECONNREFUSED):
+		return fmt.Sprintf("connection refused by %s — is the instance URL correct?", host)
+	}
+	if dnsErr, ok := errors.AsType[*net.DNSError](urlErr.Err); ok {
+		return fmt.Sprintf("cannot resolve %s — check the instance URL and your network", dnsErr.Name)
+	}
+	return err.Error()
+}
+
+// hostOf extracts the hostname from a request URL, falling back to a
+// generic name when the URL cannot be parsed.
+func hostOf(rawURL string) string {
+	if u, err := url.Parse(rawURL); err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return "the API"
 }

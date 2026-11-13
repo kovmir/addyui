@@ -1,7 +1,13 @@
 package views
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"syscall"
 	"testing"
 )
 
@@ -179,5 +185,84 @@ func TestFormatLabelsCoverCycleOrder(t *testing.T) {
 		if f.value == "" || f.label == "" {
 			t.Errorf("aliasFormats[%d] has an empty value or label: %+v", i, f)
 		}
+	}
+}
+
+func TestDescribeError(t *testing.T) {
+	t.Parallel()
+
+	// wrap mimics the "request failed: %w" wrapping used by the
+	// commands in this package, so the tests cover the same error
+	// chain the views receive at runtime.
+	wrap := func(err error) error { return fmt.Errorf("request failed: %w", err) }
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "timeout",
+			err: wrap(&url.Error{
+				Op:  "Get",
+				URL: "https://app.addy.io/api/v1/aliases?page=1",
+				Err: context.DeadlineExceeded,
+			}),
+			want: "request timed out — is app.addy.io reachable?",
+		},
+		{
+			name: "connection refused",
+			err: wrap(&url.Error{
+				Op:  "Get",
+				URL: "https://app.addy.io/api/v1/aliases?page=1",
+				Err: &net.OpError{
+					Op:  "dial",
+					Net: "tcp",
+					Err: &os.SyscallError{Syscall: "connect", Err: syscall.ECONNREFUSED},
+				},
+			}),
+			want: "connection refused by app.addy.io — is the instance URL correct?",
+		},
+		{
+			name: "DNS failure",
+			err: wrap(&url.Error{
+				Op:  "Get",
+				URL: "https://app.addy.io/api/v1/aliases?page=1",
+				Err: &net.OpError{
+					Op:  "dial",
+					Net: "tcp",
+					Err: &net.DNSError{Err: "no such host", Name: "app.addy.io", IsNotFound: true},
+				},
+			}),
+			want: "cannot resolve app.addy.io — check the instance URL and your network",
+		},
+		{
+			name: "unparseable URL falls back to a generic host",
+			err: wrap(&url.Error{
+				Op:  "Get",
+				URL: "::not a url::",
+				Err: context.DeadlineExceeded,
+			}),
+			want: "request timed out — is the API reachable?",
+		},
+		{
+			name: "unknown error keeps its original text",
+			err:  wrap(errors.New("unexpected response: 500 Internal Server Error")),
+			want: "request failed: unexpected response: 500 Internal Server Error",
+		},
+		{
+			name: "nil-safe plain error without transport wrapping",
+			err:  context.DeadlineExceeded,
+			want: "context deadline exceeded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := describeError(tt.err); got != tt.want {
+				t.Errorf("describeError(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
 	}
 }

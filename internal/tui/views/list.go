@@ -324,7 +324,7 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionDoneMsg:
 		if msg.err != nil {
-			m.status = fmt.Sprintf("%s failed: %v", msg.op, msg.err)
+			m.status = fmt.Sprintf("%s failed: %s", msg.op, describeError(msg.err))
 			return m, nil
 		}
 		m.status = msg.op
@@ -347,7 +347,7 @@ func (m ListModel) View() tea.View {
 
 	switch {
 	case m.err != nil:
-		fmt.Fprintf(&b, "Error: %v\n\n", m.err)
+		fmt.Fprintf(&b, "Error: %s\n\n", describeError(m.err))
 	case m.loading:
 		b.WriteString("Loading aliases...\n")
 	case len(m.aliases) == 0:

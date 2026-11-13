@@ -152,7 +152,7 @@ func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case recipientsLoadedMsg:
 		if msg.err != nil {
-			m.status = fmt.Sprintf("load recipients failed: %v", msg.err)
+			m.status = fmt.Sprintf("load recipients failed: %s", describeError(msg.err))
 			return m, nil
 		}
 		if m.index < 0 || m.index >= len(m.aliases) {
@@ -172,7 +172,7 @@ func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailsActionDoneMsg:
 		if msg.err != nil {
-			m.status = fmt.Sprintf("%s failed: %v", msg.op, msg.err)
+			m.status = fmt.Sprintf("%s failed: %s", msg.op, describeError(msg.err))
 			return m, nil
 		}
 		m.status = msg.op

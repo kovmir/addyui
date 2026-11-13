@@ -190,7 +190,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case createDoneMsg:
 		if msg.err != nil {
-			m.status = fmt.Sprintf("create failed: %v", msg.err)
+			m.status = fmt.Sprintf("create failed: %s", describeError(msg.err))
 			return m, nil
 		}
 		return m, PopViewWith(actionDoneMsg{op: "alias created"})
@@ -293,7 +293,7 @@ func (m CreateModel) View() tea.View {
 		fmt.Fprintf(&b, "\n\n%s", m.status)
 	}
 	if m.err != nil {
-		fmt.Fprintf(&b, "\n\nError: %v", m.err)
+		fmt.Fprintf(&b, "\n\nError: %s", describeError(m.err))
 	}
 	if m.loading {
 		b.WriteString("\n\nLoading domain options...")
