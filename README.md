@@ -1,6 +1,6 @@
 # addyui
 
-[addy.io](https://addy.io/) terminal user interface.
+[addy.io][addy_api] terminal user interface.
 
 # PREVIEW
 
@@ -8,7 +8,7 @@
 
 # INSTALL
 
-Download from release artifacts or build from source:
+Download from [release artifacts][release_artifacts] or build from source:
 
 ```sh
 git clone https://github.com/kovmir/addyui.git
@@ -18,6 +18,10 @@ make build install
 
 # USAGE
 
-[Create a new addy.io token](https://app.addy.io/settings/api), and set
-`ADDY_API_KEY=your_token`. Invoke `addyui -help` to see the available CLI
-flags. Invoke `addyui` to start the program. Hit `F1` for help in the TUI.
+[Create a new addy.io token][addy_api], and set `ADDY_API_KEY=your_token`.
+Invoke `addyui -help` to see the available CLI flags. Invoke `addyui` to start
+the program. Hit `F1` for help in the TUI.
+
+[addy_api]: https://app.addy.io/settings/api
+[addy_homepage]: https://addy.io/
+[release_artifacts]: https://github.com/kovmir/addyui/releases/latest
