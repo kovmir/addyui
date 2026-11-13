@@ -4,7 +4,7 @@
 
 # PREVIEW
 
-![addyui demo](vhs/demo.gif)
+![addyui demo](screenshot.png)
 
 # INSTALL
 
