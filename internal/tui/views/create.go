@@ -91,7 +91,7 @@ type CreateModel struct {
 func NewCreateModel(client *api.ClientWithResponses) CreateModel {
 	t := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "FIELD", Width: fieldColWidth},
+			{Title: "PROPERTY", Width: fieldColWidth},
 			{Title: "VALUE", Width: 40},
 		}),
 		table.WithHeight(createRowCount+1), // header + rows, replaced on WindowSizeMsg
@@ -143,7 +143,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetWidth(msg.Width)
 		// Let the value column use the rest of the terminal width.
 		m.table.SetColumns([]table.Column{
-			{Title: "FIELD", Width: fieldColWidth},
+			{Title: "PROPERTY", Width: fieldColWidth},
 			{Title: "VALUE", Width: max(msg.Width-fieldColWidth, 20)},
 		})
 		m.table.SetHeight(createRowCount + 1)

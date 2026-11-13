@@ -76,7 +76,7 @@ type detailsActionDoneMsg struct {
 func NewDetailsModel(client *api.ClientWithResponses) DetailsModel {
 	t := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "FIELD", Width: fieldColWidth},
+			{Title: "PROPERTY", Width: fieldColWidth},
 			{Title: "VALUE", Width: 40},
 		}),
 		table.WithFocused(true),
@@ -123,7 +123,7 @@ func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetWidth(msg.Width)
 		// Let the value column use the rest of the terminal width.
 		m.table.SetColumns([]table.Column{
-			{Title: "FIELD", Width: fieldColWidth},
+			{Title: "PROPERTY", Width: fieldColWidth},
 			{Title: "VALUE", Width: max(msg.Width-fieldColWidth, 20)},
 		})
 		// Show all rows without scrolling when they fit.
