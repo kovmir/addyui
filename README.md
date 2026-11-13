@@ -6,6 +6,8 @@
 
 ![addyui demo](screenshot.png)
 
+Supports full alias and recipients management.
+
 # INSTALL
 
 Download from [release artifacts][release_artifacts] or build from source:
