@@ -291,6 +291,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Cycle pin filter.
 		case "f":
 			m.pinFilter = (m.pinFilter + 1) % 3
+			m.page = 1
 			return m, m.fetchAliases()
 		// Cycle view filter.
 		case "v":
@@ -300,6 +301,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 			}
+			m.page = 1
 			return m, m.fetchAliases()
 		// Refetch aliases.
 		case "r":
