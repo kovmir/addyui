@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package api is the addy.io REST API client.
 //
 // gen.go is generated from openapi.yaml by oapi-codegen; do not edit it.

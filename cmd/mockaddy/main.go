@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Command mockaddy serves a tiny in-memory fake of the addy.io API so the
 // TUI can be demonstrated and screenshotted without touching a real account.
 //

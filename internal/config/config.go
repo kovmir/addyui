@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package config loads addyui's runtime configuration from the environment.
 package config
 

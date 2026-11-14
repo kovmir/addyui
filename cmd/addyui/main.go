@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // This is addy.io terminal user interface.
 package main
 

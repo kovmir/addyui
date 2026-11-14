@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package tui holds the root Bubble Tea model that owns the views and
 // routes messages between them.
 package tui
