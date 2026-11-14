@@ -13,30 +13,8 @@ import (
 	"github.com/kovmir/addyui/internal/api"
 )
 
-// This file implements the TUI screen with the recipient list, plus the
-// recipient type shared with the other recipient screens.
-
-// recipient is an email address that can receive forwarded mail.
-type recipient struct {
-	id    string
-	email string
-
-	description     string
-	active          bool
-	emailVerifiedAt string // Empty when not verified.
-	aliasesCount    int
-
-	canReplySend        bool
-	fingerprint         string
-	shouldEncrypt       bool
-	inlineEncryption    bool
-	protectedHeaders    bool
-	removePgpKeys       bool
-	removePgpSignatures bool
-
-	createdAt string
-	updatedAt string
-}
+// This file implements the TUI screen with the recipient list. Code
+// shared between the recipient screens lives in recipient.go.
 
 // verifiedFilter selects which recipients are listed based on their
 // verification state.
@@ -222,6 +200,11 @@ func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.deleteArm = false
 			return m, m.deleteRecipient(r)
+		// Toggle recipient active state.
+		case "space":
+			if r, ok := m.selected(); ok {
+				return m, m.toggleActive(r)
+			}
 		// Cycle verified filter.
 		case "f":
 			m.verifiedFilter = (m.verifiedFilter + 1) % 3
@@ -388,6 +371,23 @@ func (m RecipientListModel) createRecipient(email string) tea.Cmd {
 			return recipientActionDoneMsg{op: "create recipient", err: err}
 		}
 		return recipientActionDoneMsg{op: "created recipient"}
+	}
+}
+
+// toggleActive activates the recipient if it is inactive, and vice versa.
+func (m RecipientListModel) toggleActive(r recipient) tea.Cmd {
+	if r.id == "" {
+		return nil
+	}
+	active := !r.active
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		if err := setRecipientActive(ctx, m.client, r.id, active); err != nil {
+			return recipientActionDoneMsg{op: "toggle active", err: err}
+		}
+		return recipientActionDoneMsg{op: "toggled active state"}
 	}
 }
 

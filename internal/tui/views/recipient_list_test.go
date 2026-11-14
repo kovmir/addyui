@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
 	"github.com/kovmir/addyui/internal/mockaddy"
 )
 
@@ -126,6 +127,128 @@ func TestRecipientRows(t *testing.T) {
 				t.Errorf("row %d col %d = %q, want %q", i, j, rows[i][j], cell)
 			}
 		}
+	}
+}
+
+func TestRecipientListToggleActive(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t,
+		mockaddy.WithRecipients(seedRecipients()),
+		mockaddy.WithAliases(seedRecipientAliases()))
+	m := NewRecipientListModel(client)
+
+	loaded := m.fetchRecipients()().(recipientsListLoadedMsg)
+	if loaded.err != nil {
+		t.Fatalf("fetch failed: %v", loaded.err)
+	}
+
+	// Toggle r1 (active) off.
+	msg := m.toggleActive(loaded.recipients[0])()
+	done, ok := msg.(recipientActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want recipientActionDoneMsg", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggle active failed: %v", done.err)
+	}
+	if done.op != "toggled active state" {
+		t.Errorf("op = %q, want \"toggled active state\"", done.op)
+	}
+	loaded = m.fetchRecipients()().(recipientsListLoadedMsg)
+	if loaded.err != nil {
+		t.Fatalf("refetch failed: %v", loaded.err)
+	}
+	if loaded.recipients[0].active {
+		t.Error("r1 is still active after the toggle")
+	}
+
+	// Toggle it back on.
+	msg = m.toggleActive(loaded.recipients[0])()
+	done, ok = msg.(recipientActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want recipientActionDoneMsg", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggle active failed: %v", done.err)
+	}
+	loaded = m.fetchRecipients()().(recipientsListLoadedMsg)
+	if loaded.err != nil {
+		t.Fatalf("refetch failed: %v", loaded.err)
+	}
+	if !loaded.recipients[0].active {
+		t.Error("r1 did not become active again after the second toggle")
+	}
+}
+
+func TestRecipientListToggleActiveErrorSurfaces(t *testing.T) {
+	t.Parallel()
+
+	// The recipient does not exist on the fake server, so the toggle
+	// must come back as an error rather than a success.
+	m := NewRecipientListModel(newTestClient(t))
+	r := recipient{id: "does-not-exist", email: "gone@example.com", active: true}
+
+	msg := m.toggleActive(r)()
+	done, ok := msg.(recipientActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want recipientActionDoneMsg", msg)
+	}
+	if done.err == nil {
+		t.Error("toggle of a missing recipient must produce an error")
+	}
+}
+
+func TestRecipientListToggleActiveNoopWithoutID(t *testing.T) {
+	t.Parallel()
+
+	m := NewRecipientListModel(newTestClient(t))
+	if cmd := m.toggleActive(recipient{active: true}); cmd != nil {
+		t.Error("toggleActive without an id must return nil")
+	}
+}
+
+func TestRecipientListSpaceTogglesActive(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t,
+		mockaddy.WithRecipients(seedRecipients()),
+		mockaddy.WithAliases(seedRecipientAliases()))
+	m := NewRecipientListModel(client)
+
+	loaded := m.fetchRecipients()().(recipientsListLoadedMsg)
+	if loaded.err != nil {
+		t.Fatalf("fetch failed: %v", loaded.err)
+	}
+	m.recipients = loaded.recipients
+	m.table.SetRows(recipientRows(loaded.recipients))
+
+	// space on the selected row fires the toggle.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("space must start the active toggle")
+	}
+	msg := cmd()
+	done, ok := msg.(recipientActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want recipientActionDoneMsg", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggle active failed: %v", done.err)
+	}
+	if done.op != "toggled active state" {
+		t.Errorf("op = %q, want \"toggled active state\"", done.op)
+	}
+}
+
+func TestRecipientListSpaceWithoutSelection(t *testing.T) {
+	t.Parallel()
+
+	// space with no recipients loaded must not start a toggle.
+	m := NewRecipientListModel(newTestClient(t))
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd != nil {
+		t.Error("space without a selection must be a no-op")
 	}
 }
 

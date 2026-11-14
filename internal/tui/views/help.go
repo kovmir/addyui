@@ -15,7 +15,8 @@ ALIAS DETAILS     j/k interactive row · J/K scroll · space act on row · p/n p
 
 NEW ALIAS         space edit field · enter submit · esc back · q quit
 
-RECIPIENT LIST    enter details · c create · x delete (twice) · f verified filter · r refetch · esc back · q quit
+RECIPIENT LIST    enter details · c create · space toggle active · x delete (twice) · f verified filter
+                  r refetch · esc back · q quit
 
 RECIPIENT DETAILS j/k interactive row · J/K scroll · space act on row · p/n prev/next recipient
                   space on Aliases opens its alias list · esc back · q quit`

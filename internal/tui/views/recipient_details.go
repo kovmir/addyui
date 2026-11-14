@@ -364,25 +364,12 @@ func (m *RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	activate := !r.active
+	active := !r.active
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if activate {
-			var resp *api.ActivateASpecificRecipientResponse
-			resp, err = m.client.ActivateASpecificRecipientWithResponse(ctx,
-				&api.ActivateASpecificRecipientParams{},
-				api.ActivateASpecificRecipientJSONRequestBody{Id: id})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.DeactivateASpecificRecipientResponse
-			resp, err = m.client.DeactivateASpecificRecipientWithResponse(ctx, id,
-				&api.DeactivateASpecificRecipientParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setRecipientActive(ctx, m.client, id, active); err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle active", err: err}
 		}
 		return m.refreshMsg(ctx, id, "toggled active state")
