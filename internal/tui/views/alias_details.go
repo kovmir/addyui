@@ -124,8 +124,8 @@ const (
 	detailsRowDeleted
 )
 
-// DetailsModel shows the attributes of a single alias as a two-column table.
-type DetailsModel struct {
+// AliasDetailsModel shows the attributes of a single alias as a two-column table.
+type AliasDetailsModel struct {
 	client  *api.ClientWithResponses
 	aliases []api.Alias // Snapshot of the list screen's page.
 	index   int         // Position within aliases.
@@ -151,16 +151,16 @@ type aliasSelectedMsg struct {
 	index   int
 }
 
-// detailsActionDoneMsg carries the result of a mutating API call made
+// aliasDetailsActionDoneMsg carries the result of a mutating API call made
 // from the details screen, plus the refreshed alias on success so the
 // snapshot stays in sync with the server.
-type detailsActionDoneMsg struct {
+type aliasDetailsActionDoneMsg struct {
 	op    string
 	alias *api.Alias // fresh alias from the API; nil on error
 	err   error
 }
 
-func NewDetailsModel(client *api.ClientWithResponses) DetailsModel {
+func NewAliasDetailsModel(client *api.ClientWithResponses) AliasDetailsModel {
 	t := table.New(
 		table.WithColumns([]table.Column{
 			{Title: "PROPERTY", Width: fieldColWidth},
@@ -191,7 +191,7 @@ func NewDetailsModel(client *api.ClientWithResponses) DetailsModel {
 		table.WithStyles(tableStyles()),
 	)
 
-	return DetailsModel{
+	return AliasDetailsModel{
 		client:           client,
 		table:            t,
 		descEditor:       input,
@@ -200,11 +200,11 @@ func NewDetailsModel(client *api.ClientWithResponses) DetailsModel {
 	}
 }
 
-func (m DetailsModel) Init() tea.Cmd {
+func (m AliasDetailsModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m AliasDetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.table.SetWidth(msg.Width)
@@ -257,7 +257,7 @@ func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recipientsIsEditing = true
 		m.syncPicker()
 
-	case detailsActionDoneMsg:
+	case aliasDetailsActionDoneMsg:
 		if msg.err != nil {
 			m.status = fmt.Sprintf("%s failed: %s", msg.op, describeError(msg.err))
 			return m, nil
@@ -354,7 +354,7 @@ func (m DetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // move steps to the neighboring alias, clamped to the list bounds.
-func (m *DetailsModel) move(delta int) {
+func (m *AliasDetailsModel) move(delta int) {
 	if len(m.aliases) == 0 {
 		return
 	}
@@ -377,7 +377,7 @@ var interactiveRowIndices = []int{
 // row, or to the previous one for a negative delta. It clamps at the
 // first and last interactive rows, so the cursor never rests on a row
 // space cannot act on.
-func (m *DetailsModel) moveCursorInteractive(delta int) {
+func (m *AliasDetailsModel) moveCursorInteractive(delta int) {
 	cur := m.table.Cursor()
 	next := cur
 	if delta > 0 {
@@ -402,7 +402,7 @@ func (m *DetailsModel) moveCursorInteractive(delta int) {
 // for the description, a picker for the recipients, and an API toggle
 // for the active, pinned and deleted states. Non-interactive rows
 // (email, domain, local part, stats, timestamps) do nothing.
-func (m *DetailsModel) interact(row int) tea.Cmd {
+func (m *AliasDetailsModel) interact(row int) tea.Cmd {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return nil
 	}
@@ -431,7 +431,7 @@ func (m *DetailsModel) interact(row int) tea.Cmd {
 // updateDescription sends the new description to the API, then refreshes
 // the snapshot. Sending nothing when the value is unchanged avoids a
 // pointless request.
-func (m *DetailsModel) updateDescription(description string) tea.Cmd {
+func (m *AliasDetailsModel) updateDescription(description string) tea.Cmd {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return nil
 	}
@@ -448,7 +448,7 @@ func (m *DetailsModel) updateDescription(description string) tea.Cmd {
 			&api.UpdateASpecificAliasParams{},
 			api.UpdateASpecificAliasJSONRequestBody{Description: &description})
 		if err = apiError(err, resp); err != nil {
-			return detailsActionDoneMsg{op: "update description", err: err}
+			return aliasDetailsActionDoneMsg{op: "update description", err: err}
 		}
 		return m.refreshMsg(ctx, id, "updated description")
 	}
@@ -457,7 +457,7 @@ func (m *DetailsModel) updateDescription(description string) tea.Cmd {
 // toggleActive activates the alias if it is inactive, and vice versa.
 // A deleted alias cannot be activated; restoring it re-activates it
 // server-side, so space sends a restore only.
-func (m *DetailsModel) toggleActive(a *api.Alias) tea.Cmd {
+func (m *AliasDetailsModel) toggleActive(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -484,14 +484,14 @@ func (m *DetailsModel) toggleActive(a *api.Alias) tea.Cmd {
 			err = apiError(err, resp)
 		}
 		if err != nil {
-			return detailsActionDoneMsg{op: "toggle active", err: err}
+			return aliasDetailsActionDoneMsg{op: "toggle active", err: err}
 		}
 		return m.refreshMsg(ctx, id, "toggled active state")
 	}
 }
 
 // togglePin pins the alias if it is unpinned, and vice versa.
-func (m *DetailsModel) togglePin(a *api.Alias) tea.Cmd {
+func (m *AliasDetailsModel) togglePin(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -515,7 +515,7 @@ func (m *DetailsModel) togglePin(a *api.Alias) tea.Cmd {
 			err = apiError(err, resp)
 		}
 		if err != nil {
-			return detailsActionDoneMsg{op: "toggle pin", err: err}
+			return aliasDetailsActionDoneMsg{op: "toggle pin", err: err}
 		}
 		return m.refreshMsg(ctx, id, "toggled pin state")
 	}
@@ -523,7 +523,7 @@ func (m *DetailsModel) togglePin(a *api.Alias) tea.Cmd {
 
 // toggleDeleted restores the alias if it is deleted, and deletes it
 // otherwise. Deletion is soft: the alias can be restored later.
-func (m *DetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
+func (m *AliasDetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -538,14 +538,14 @@ func (m *DetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
 		resp, err := m.client.DeleteASpecificAliasWithResponse(ctx, id,
 			&api.DeleteASpecificAliasParams{})
 		if err = apiError(err, resp); err != nil {
-			return detailsActionDoneMsg{op: "delete alias", err: err}
+			return aliasDetailsActionDoneMsg{op: "delete alias", err: err}
 		}
 		return m.refreshMsg(ctx, id, "deleted alias")
 	}
 }
 
 // restoreCmd restores a deleted alias and refreshes the snapshot.
-func (m *DetailsModel) restoreCmd(id, op string) tea.Cmd {
+func (m *AliasDetailsModel) restoreCmd(id, op string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -553,7 +553,7 @@ func (m *DetailsModel) restoreCmd(id, op string) tea.Cmd {
 		resp, err := m.client.RestoreASpecificDeletedAliasWithResponse(ctx, id,
 			&api.RestoreASpecificDeletedAliasParams{})
 		if err = apiError(err, resp); err != nil {
-			return detailsActionDoneMsg{op: op, err: err}
+			return aliasDetailsActionDoneMsg{op: op, err: err}
 		}
 		return m.refreshMsg(ctx, id, op)
 	}
@@ -561,7 +561,7 @@ func (m *DetailsModel) restoreCmd(id, op string) tea.Cmd {
 
 // applyRecipients sends the picker's selection to the API, replacing
 // the alias's attached recipients, then refreshes the snapshot.
-func (m *DetailsModel) applyRecipients() tea.Cmd {
+func (m *AliasDetailsModel) applyRecipients() tea.Cmd {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return nil
 	}
@@ -586,31 +586,31 @@ func (m *DetailsModel) applyRecipients() tea.Cmd {
 				RecipientIds: ids,
 			})
 		if err = apiError(err, resp); err != nil {
-			return detailsActionDoneMsg{op: "update recipients", err: err}
+			return aliasDetailsActionDoneMsg{op: "update recipients", err: err}
 		}
 		return m.refreshMsg(ctx, id, "updated recipients")
 	}
 }
 
-// refreshMsg fetches the alias and returns a detailsActionDoneMsg
+// refreshMsg fetches the alias and returns a aliasDetailsActionDoneMsg
 // carrying the fresh snapshot, so the table reflects the server state.
-func (m *DetailsModel) refreshMsg(ctx context.Context, id, op string) tea.Msg {
+func (m *AliasDetailsModel) refreshMsg(ctx context.Context, id, op string) tea.Msg {
 	resp, err := m.client.GetASpecificAliasWithResponse(ctx, id, &api.GetASpecificAliasParams{})
 	if err != nil {
-		return detailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %w", err)}
+		return aliasDetailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %w", err)}
 	}
 	if resp.JSON200 == nil || resp.JSON200.Data == nil {
-		return detailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %s", resp.Status())}
+		return aliasDetailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %s", resp.Status())}
 	}
 	// The generated response embeds an anonymous struct with the same
 	// layout as api.Alias; convert it into the snapshot type.
 	alias := api.Alias(*resp.JSON200.Data)
-	return detailsActionDoneMsg{op: op, alias: &alias}
+	return aliasDetailsActionDoneMsg{op: op, alias: &alias}
 }
 
 // syncPicker refreshes the recipients picker rows and height after a
 // recipient was toggled or the list was fetched.
-func (m *DetailsModel) syncPicker() {
+func (m *AliasDetailsModel) syncPicker() {
 	rows := make([]table.Row, 0, len(m.recipientsAvail))
 	for _, r := range m.recipientsAvail {
 		selected := ""
@@ -624,14 +624,14 @@ func (m *DetailsModel) syncPicker() {
 }
 
 // syncRows refreshes the table rows after the alias snapshot changed.
-func (m *DetailsModel) syncRows() {
+func (m *AliasDetailsModel) syncRows() {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return
 	}
 	m.table.SetRows(detailsRows(&m.aliases[m.index]))
 }
 
-func (m DetailsModel) View() tea.View {
+func (m AliasDetailsModel) View() tea.View {
 	var b strings.Builder
 	b.WriteString(m.table.View())
 	if m.status != "" {

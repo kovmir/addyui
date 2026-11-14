@@ -7,9 +7,9 @@ import tea "charm.land/bubbletea/v2"
 type ViewID int
 
 const (
-	ViewList ViewID = iota
-	ViewDetails
-	ViewCreate
+	ViewAliasList ViewID = iota
+	ViewAliasDetails
+	ViewAliasCreate
 	ViewHelp
 	ViewRecipientList
 	ViewRecipientDetails

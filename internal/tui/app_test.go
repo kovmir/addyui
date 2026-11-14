@@ -45,7 +45,7 @@ func keyPress(code rune) tea.KeyPressMsg {
 func TestAppModelCtrlCQuits(t *testing.T) {
 	t.Parallel()
 
-	m, _ := newSpyApp(views.ViewList, &spyView{id: views.ViewList})
+	m, _ := newSpyApp(views.ViewAliasList, &spyView{id: views.ViewAliasList})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+c produced no command, want a quit command")
@@ -58,9 +58,9 @@ func TestAppModelCtrlCQuits(t *testing.T) {
 func TestAppModelDelegatesOtherKeysToActiveView(t *testing.T) {
 	t.Parallel()
 
-	list := &spyView{id: views.ViewList}
-	details := &spyView{id: views.ViewDetails}
-	m, _ := newSpyApp(views.ViewList, list, details)
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
+	m, _ := newSpyApp(views.ViewAliasList, list, details)
 
 	msg := keyPress('x')
 	m.Update(msg)
@@ -76,24 +76,24 @@ func TestAppModelDelegatesOtherKeysToActiveView(t *testing.T) {
 func TestAppModelSwitchView(t *testing.T) {
 	t.Parallel()
 
-	list := &spyView{id: views.ViewList}
-	details := &spyView{id: views.ViewDetails}
-	m, byID := newSpyApp(views.ViewList, list, details)
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
+	m, byID := newSpyApp(views.ViewAliasList, list, details)
 
 	payload := keyPress('p') // arbitrary stand-in payload
-	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewDetails, With: payload})
+	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewAliasDetails, With: payload})
 	m = model.(AppModel)
 
-	if m.active != views.ViewDetails {
-		t.Errorf("active = %d, want %d", m.active, views.ViewDetails)
+	if m.active != views.ViewAliasDetails {
+		t.Errorf("active = %d, want %d", m.active, views.ViewAliasDetails)
 	}
-	if len(m.history) != 1 || m.history[0] != views.ViewList {
-		t.Errorf("history = %v, want [ViewList]", m.history)
+	if len(m.history) != 1 || m.history[0] != views.ViewAliasList {
+		t.Errorf("history = %v, want [ViewAliasList]", m.history)
 	}
-	if byID[views.ViewDetails].initCalls != 1 {
-		t.Errorf("new view Init called %d times, want 1", byID[views.ViewDetails].initCalls)
+	if byID[views.ViewAliasDetails].initCalls != 1 {
+		t.Errorf("new view Init called %d times, want 1", byID[views.ViewAliasDetails].initCalls)
 	}
-	got := byID[views.ViewDetails].messages
+	got := byID[views.ViewAliasDetails].messages
 	if len(got) != 1 || got[0] != payload {
 		t.Errorf("new view received %v, want the payload", got)
 	}
@@ -105,19 +105,19 @@ func TestAppModelSwitchView(t *testing.T) {
 func TestAppModelSwitchToSameViewIsNoOp(t *testing.T) {
 	t.Parallel()
 
-	list := &spyView{id: views.ViewList}
-	m, byID := newSpyApp(views.ViewList, list)
+	list := &spyView{id: views.ViewAliasList}
+	m, byID := newSpyApp(views.ViewAliasList, list)
 
-	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewList})
+	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewAliasList})
 	m = model.(AppModel)
 
-	if m.active != views.ViewList {
-		t.Errorf("active = %d, want %d", m.active, views.ViewList)
+	if m.active != views.ViewAliasList {
+		t.Errorf("active = %d, want %d", m.active, views.ViewAliasList)
 	}
 	if len(m.history) != 0 {
 		t.Errorf("history = %v, want empty: switching to the active view must not push history", m.history)
 	}
-	if byID[views.ViewList].initCalls != 0 {
+	if byID[views.ViewAliasList].initCalls != 0 {
 		t.Error("Init must not run again for the already active view")
 	}
 }
@@ -125,12 +125,12 @@ func TestAppModelSwitchToSameViewIsNoOp(t *testing.T) {
 func TestAppModelPopView(t *testing.T) {
 	t.Parallel()
 
-	list := &spyView{id: views.ViewList}
-	details := &spyView{id: views.ViewDetails}
-	m, byID := newSpyApp(views.ViewList, list, details)
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
+	m, byID := newSpyApp(views.ViewAliasList, list, details)
 
 	// Push: list -> details.
-	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewDetails})
+	model, _ := m.Update(views.SwitchViewMsg{To: views.ViewAliasDetails})
 	m = model.(AppModel)
 
 	// Pop: details -> list, with a payload for the restored view.
@@ -138,13 +138,13 @@ func TestAppModelPopView(t *testing.T) {
 	model, _ = m.Update(views.PopViewMsg{With: payload})
 	m = model.(AppModel)
 
-	if m.active != views.ViewList {
-		t.Errorf("active = %d, want %d", m.active, views.ViewList)
+	if m.active != views.ViewAliasList {
+		t.Errorf("active = %d, want %d", m.active, views.ViewAliasList)
 	}
 	if len(m.history) != 0 {
 		t.Errorf("history = %v, want empty after popping", m.history)
 	}
-	got := byID[views.ViewList].messages
+	got := byID[views.ViewAliasList].messages
 	if len(got) != 1 || got[0] != payload {
 		t.Errorf("restored view received %v, want the payload", got)
 	}
@@ -153,7 +153,7 @@ func TestAppModelPopView(t *testing.T) {
 func TestAppModelPopViewWithoutHistoryQuits(t *testing.T) {
 	t.Parallel()
 
-	m, _ := newSpyApp(views.ViewList, &spyView{id: views.ViewList})
+	m, _ := newSpyApp(views.ViewAliasList, &spyView{id: views.ViewAliasList})
 	_, cmd := m.Update(views.PopViewMsg{})
 	if cmd == nil {
 		t.Fatal("pop without history produced no command, want a quit command")
@@ -166,10 +166,10 @@ func TestAppModelPopViewWithoutHistoryQuits(t *testing.T) {
 func TestAppModelBroadcastsWindowSize(t *testing.T) {
 	t.Parallel()
 
-	list := &spyView{id: views.ViewList}
-	details := &spyView{id: views.ViewDetails}
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
 	help := &spyView{id: views.ViewHelp}
-	m, byID := newSpyApp(views.ViewList, list, details, help)
+	m, byID := newSpyApp(views.ViewAliasList, list, details, help)
 
 	msg := tea.WindowSizeMsg{Width: 80, Height: 24}
 	m.Update(msg)

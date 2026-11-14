@@ -42,9 +42,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	startupView := views.ViewList
+	startupView := views.ViewAliasList
 	if *flagNew {
-		startupView = views.ViewCreate
+		startupView = views.ViewAliasCreate
 	}
 	listFilter := views.StateActiveInactive
 	if *flagFind != "" {

@@ -351,15 +351,15 @@ func TestToggleActiveDeactivates(t *testing.T) {
 			Active: true, CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
 	}))
 
-	m := NewDetailsModel(client)
+	m := NewAliasDetailsModel(client)
 	active := true
 	m.aliases = []api.Alias{{Id: &id, Active: &active}}
 	m.index = 0
 
 	msg := m.toggleActive(&m.aliases[0])() // run the tea.Cmd
-	done, ok := msg.(detailsActionDoneMsg)
+	done, ok := msg.(aliasDetailsActionDoneMsg)
 	if !ok {
-		t.Fatalf("command produced %T, want detailsActionDoneMsg", msg)
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
 	}
 	if done.err != nil {
 		t.Fatalf("toggle active failed: %v", done.err)
@@ -381,14 +381,14 @@ func TestToggleActiveActivates(t *testing.T) {
 			Active: false, CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
 	}))
 
-	m := NewDetailsModel(client)
+	m := NewAliasDetailsModel(client)
 	m.aliases = []api.Alias{{Id: &id, Active: new(bool)}}
 	m.index = 0
 
 	msg := m.toggleActive(&m.aliases[0])() // run the tea.Cmd
-	done, ok := msg.(detailsActionDoneMsg)
+	done, ok := msg.(aliasDetailsActionDoneMsg)
 	if !ok {
-		t.Fatalf("command produced %T, want detailsActionDoneMsg", msg)
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
 	}
 	if done.err != nil {
 		t.Fatalf("toggle active failed: %v", done.err)
@@ -406,14 +406,14 @@ func TestToggleActiveErrorSurfaces(t *testing.T) {
 	id := "does-not-exist"
 	client := newTestClient(t)
 
-	m := NewDetailsModel(client)
+	m := NewAliasDetailsModel(client)
 	m.aliases = []api.Alias{{Id: &id, Active: new(bool)}}
 	m.index = 0
 
 	msg := m.toggleActive(&m.aliases[0])() // run the tea.Cmd
-	done, ok := msg.(detailsActionDoneMsg)
+	done, ok := msg.(aliasDetailsActionDoneMsg)
 	if !ok {
-		t.Fatalf("command produced %T, want detailsActionDoneMsg", msg)
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
 	}
 	if done.err == nil {
 		t.Error("toggle of a missing alias must produce an error")

@@ -9,8 +9,8 @@ import (
 // newTestCreateModel returns a create screen with domain options
 // loaded, detached from any API client: the functions under test are
 // pure state transitions.
-func newTestCreateModel(domains []string) *CreateModel {
-	m := NewCreateModel(nil)
+func newTestCreateModel(domains []string) *AliasCreateModel {
+	m := NewAliasCreateModel(nil)
 	m.loading = false
 	m.domains = domains
 	return &m
@@ -164,16 +164,16 @@ func TestFetchDomains(t *testing.T) {
 
 	client := newTestClient(t)
 
-	msg := NewCreateModel(client).fetchDomains()() // run the tea.Cmd
-	opts, ok := msg.(createOptionsMsg)
+	msg := NewAliasCreateModel(client).fetchDomains()() // run the tea.Cmd
+	opts, ok := msg.(aliasCreateOptionsMsg)
 	if !ok {
-		t.Fatalf("command produced %T, want createOptionsMsg", msg)
+		t.Fatalf("command produced %T, want aliasCreateOptionsMsg", msg)
 	}
 	if opts.err != nil {
-		t.Fatalf("createOptionsMsg error = %v", opts.err)
+		t.Fatalf("aliasCreateOptionsMsg error = %v", opts.err)
 	}
 	if len(opts.domains) == 0 {
-		t.Fatal("createOptionsMsg has no domains")
+		t.Fatal("aliasCreateOptionsMsg has no domains")
 	}
 	if opts.defaultDomain != mockaddy.DefaultDomain {
 		t.Errorf("defaultDomain = %q, want %q", opts.defaultDomain, mockaddy.DefaultDomain)

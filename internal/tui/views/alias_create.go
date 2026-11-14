@@ -46,26 +46,26 @@ const (
 // createRowCount is the number of rows in the field table.
 const createRowCount = 4
 
-// createOptionsMsg carries the result of the domain-options fetch.
-type createOptionsMsg struct {
+// aliasCreateOptionsMsg carries the result of the domain-options fetch.
+type aliasCreateOptionsMsg struct {
 	domains       []string
 	defaultDomain string
 	defaultFormat string
 	err           error
 }
 
-// createDoneMsg carries the result of the create-alias call back to
+// aliasCreateDoneMsg carries the result of the create-alias call back to
 // the model.
-type createDoneMsg struct {
+type aliasCreateDoneMsg struct {
 	err error
 }
 
-// CreateModel is the "new alias" screen. It presents the editable
+// AliasCreateModel is the "new alias" screen. It presents the editable
 // fields as a table; the cursor selects a row and space starts the
 // interaction: cycling through the defined options for domain and
 // format, opening a single-line input for the description, or showing
 // a recipients table below in which space toggles each recipient.
-type CreateModel struct {
+type AliasCreateModel struct {
 	client *api.ClientWithResponses
 	table  table.Model
 	picker table.Model // recipients selection; visible while pickerOpen
@@ -86,9 +86,9 @@ type CreateModel struct {
 	status  string
 }
 
-// NewCreateModel builds the create screen. It stays idle until a
+// NewAliasCreateModel builds the create screen. It stays idle until a
 // createStartMsg arrives.
-func NewCreateModel(client *api.ClientWithResponses) CreateModel {
+func NewAliasCreateModel(client *api.ClientWithResponses) AliasCreateModel {
 	t := table.New(
 		table.WithColumns([]table.Column{
 			{Title: "PROPERTY", Width: fieldColWidth},
@@ -118,7 +118,7 @@ func NewCreateModel(client *api.ClientWithResponses) CreateModel {
 		table.WithStyles(tableStyles()),
 	)
 
-	m := CreateModel{
+	m := AliasCreateModel{
 		client:   client,
 		table:    t,
 		picker:   p,
@@ -133,11 +133,11 @@ func NewCreateModel(client *api.ClientWithResponses) CreateModel {
 	return m
 }
 
-func (m CreateModel) Init() tea.Cmd {
+func (m AliasCreateModel) Init() tea.Cmd {
 	return tea.Batch(m.fetchDomains(), fetchVerifiedRecipients(m.client))
 }
 
-func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m AliasCreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.table.SetWidth(msg.Width)
@@ -154,7 +154,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			{Title: "RECIPIENT", Width: max(msg.Width-4, 20)},
 		})
 
-	case createOptionsMsg:
+	case aliasCreateOptionsMsg:
 		m.loading = false
 		m.err = msg.err
 		if msg.err != nil {
@@ -188,7 +188,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncPicker()
 		m.syncRows()
 
-	case createDoneMsg:
+	case aliasCreateDoneMsg:
 		if msg.err != nil {
 			m.status = fmt.Sprintf("create failed: %s", describeError(msg.err))
 			return m, nil
@@ -264,7 +264,7 @@ func (m CreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // interact starts the interaction of the row under the cursor: cycling
 // for the option rows, editing for the text rows, and opening the
 // recipients picker for the recipients row.
-func (m *CreateModel) interact(row int) tea.Cmd {
+func (m *AliasCreateModel) interact(row int) tea.Cmd {
 	switch row {
 	case createRowDomain:
 		m.cycle(createRowDomain, +1)
@@ -285,7 +285,7 @@ func (m *CreateModel) interact(row int) tea.Cmd {
 
 // View renders the table, the status line and, while the input is
 // open, the input itself.
-func (m CreateModel) View() tea.View {
+func (m AliasCreateModel) View() tea.View {
 	var b strings.Builder
 	b.WriteString(m.table.View())
 
@@ -308,7 +308,7 @@ func (m CreateModel) View() tea.View {
 }
 
 // rows builds the field table rows from the current field values.
-func (m CreateModel) rows() []table.Row {
+func (m AliasCreateModel) rows() []table.Row {
 	recipients := m.recipientsSummary()
 	description := m.description
 	if description == "" {
@@ -325,7 +325,7 @@ func (m CreateModel) rows() []table.Row {
 // recipientsSummary renders the recipient selection for the field
 // table; "-" means none are selected and the API uses the default
 // recipient.
-func (m CreateModel) recipientsSummary() string {
+func (m AliasCreateModel) recipientsSummary() string {
 	var emails []string
 	for _, r := range m.recipients {
 		if m.selected[r.id] {
@@ -337,7 +337,7 @@ func (m CreateModel) recipientsSummary() string {
 
 // syncPicker refreshes the recipients picker rows and height after a
 // recipient was toggled or the list was fetched.
-func (m *CreateModel) syncPicker() {
+func (m *AliasCreateModel) syncPicker() {
 	rows := make([]table.Row, 0, len(m.recipients))
 	for _, r := range m.recipients {
 		selected := ""
@@ -351,13 +351,13 @@ func (m *CreateModel) syncPicker() {
 }
 
 // syncRows refreshes the table rows after a value changed.
-func (m *CreateModel) syncRows() {
+func (m *AliasCreateModel) syncRows() {
 	m.table.SetRows(m.rows())
 }
 
 // currentDomain returns the selected domain, or "" when the domain
 // options are not (yet) loaded.
-func (m CreateModel) currentDomain() string {
+func (m AliasCreateModel) currentDomain() string {
 	if m.domainIdx < 0 || m.domainIdx >= len(m.domains) {
 		return ""
 	}
@@ -366,7 +366,7 @@ func (m CreateModel) currentDomain() string {
 
 // cycle moves the domain or format field to the next option, wrapping
 // around at the end of the list.
-func (m *CreateModel) cycle(row, delta int) {
+func (m *AliasCreateModel) cycle(row, delta int) {
 	switch row {
 	case createRowDomain:
 		if len(m.domains) == 0 {
@@ -381,7 +381,7 @@ func (m *CreateModel) cycle(row, delta int) {
 
 // submit validates the form and returns the command that creates the
 // alias, or nil when the form is not ready.
-func (m CreateModel) submit() tea.Cmd {
+func (m AliasCreateModel) submit() tea.Cmd {
 	if m.loading || m.currentDomain() == "" {
 		return nil
 	}
@@ -412,30 +412,30 @@ func (m CreateModel) submit() tea.Cmd {
 
 		resp, err := m.client.CreateNewAliasWithResponse(ctx, &api.CreateNewAliasParams{}, body)
 		if err != nil {
-			return createDoneMsg{err: fmt.Errorf("request failed: %w", err)}
+			return aliasCreateDoneMsg{err: fmt.Errorf("request failed: %w", err)}
 		}
 		if resp.JSON201 == nil {
-			return createDoneMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
+			return aliasCreateDoneMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
 		}
-		return createDoneMsg{}
+		return aliasCreateDoneMsg{}
 	}
 }
 
 // fetchDomains returns a command that loads the domains available for
 // new aliases together with the account's defaults.
-func (m CreateModel) fetchDomains() tea.Cmd {
+func (m AliasCreateModel) fetchDomains() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		resp, err := m.client.GetDomainOptionsWithResponse(ctx, &api.GetDomainOptionsParams{})
 		if err != nil {
-			return createOptionsMsg{err: fmt.Errorf("request failed: %w", err)}
+			return aliasCreateOptionsMsg{err: fmt.Errorf("request failed: %w", err)}
 		}
 		if resp.JSON200 == nil {
-			return createOptionsMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
+			return aliasCreateOptionsMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
 		}
-		msg := createOptionsMsg{}
+		msg := aliasCreateOptionsMsg{}
 		if data := resp.JSON200.Data; data != nil {
 			msg.domains = *data
 		}

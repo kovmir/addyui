@@ -104,8 +104,8 @@ type listForRecipientMsg struct {
 	email       string
 }
 
-// ListModel is the alias list screen.
-type ListModel struct {
+// AliasListModel is the alias list screen.
+type AliasListModel struct {
 	client  *api.ClientWithResponses
 	aliases []api.Alias
 	table   table.Model
@@ -139,14 +139,14 @@ type ListModel struct {
 
 // updateTableSize resizes the table to fit the terminal, accounting for
 // the extra lines for the search field and status.
-func (m *ListModel) updateTableSize() {
+func (m *AliasListModel) updateTableSize() {
 	chromeLines := 3 // Blank line, search or alias count, status.
 	m.table.SetHeight(max(m.termHeight-chromeLines, 3))
 	m.table.SetWidth(max(m.termWidth, 20))
 }
 
-// NewListModel builds the alias list screen.
-func NewListModel(client *api.ClientWithResponses, initialSearch string, initialFilter StateFilter) ListModel {
+// NewAliasListModel builds the alias list screen.
+func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, initialFilter StateFilter) AliasListModel {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "email or description"
 	searchInput.Prompt = "search: "
@@ -171,7 +171,7 @@ func NewListModel(client *api.ClientWithResponses, initialSearch string, initial
 		table.WithHeight(defaultTableHeight),
 	)
 
-	return ListModel{
+	return AliasListModel{
 		client:      client,
 		loading:     true,
 		table:       t,
@@ -183,12 +183,12 @@ func NewListModel(client *api.ClientWithResponses, initialSearch string, initial
 	}
 }
 
-func (m ListModel) Init() tea.Cmd {
+func (m AliasListModel) Init() tea.Cmd {
 	// Kick off the first fetch.
 	return m.fetchAliases()
 }
 
-func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		// Any key other than "x" cancels a pending forget confirmation,
@@ -230,7 +230,7 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Open alias details.
 		case "enter":
 			if _, ok := m.selected(); ok {
-				return m, SwitchViewWith(ViewDetails,
+				return m, SwitchViewWith(ViewAliasDetails,
 					aliasSelectedMsg{aliases: m.aliases, index: m.table.Cursor()})
 			}
 		// Display TUI help.
@@ -238,7 +238,7 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, SwitchView(ViewHelp)
 		// Create a new alias.
 		case "c":
-			return m, SwitchView(ViewCreate)
+			return m, SwitchView(ViewAliasCreate)
 		// Manage recipients.
 		case "R":
 			return m, SwitchView(ViewRecipientList)
@@ -362,7 +362,7 @@ func (m ListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // selected returns the alias under the table cursor, if any.
-func (m ListModel) selected() (api.Alias, bool) {
+func (m AliasListModel) selected() (api.Alias, bool) {
 	i := m.table.Cursor()
 	if i < 0 || i >= len(m.aliases) {
 		return api.Alias{}, false
@@ -370,7 +370,7 @@ func (m ListModel) selected() (api.Alias, bool) {
 	return m.aliases[i], true
 }
 
-func (m ListModel) View() tea.View {
+func (m AliasListModel) View() tea.View {
 	var b strings.Builder
 
 	switch {
@@ -442,7 +442,7 @@ func aliasRows(aliases []api.Alias) []table.Row {
 
 // fetchAliases fetches a lists of aliases using the model's
 // current pin and state filters.
-func (m ListModel) fetchAliases() tea.Cmd {
+func (m AliasListModel) fetchAliases() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -512,7 +512,7 @@ func (m ListModel) fetchAliases() tea.Cmd {
 }
 
 // toggleActive activates the alias if it is inactive, and vice versa.
-func (m ListModel) toggleActive(a api.Alias) tea.Cmd {
+func (m AliasListModel) toggleActive(a api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -543,7 +543,7 @@ func (m ListModel) toggleActive(a api.Alias) tea.Cmd {
 }
 
 // togglePin pins the alias if it is unpinned, and vice versa.
-func (m ListModel) togglePin(a api.Alias) tea.Cmd {
+func (m AliasListModel) togglePin(a api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -574,7 +574,7 @@ func (m ListModel) togglePin(a api.Alias) tea.Cmd {
 }
 
 // toggleDeleted restores the alias if it is deleted, and vice versa.
-func (m ListModel) toggleDeleted(a api.Alias) tea.Cmd {
+func (m AliasListModel) toggleDeleted(a api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -607,7 +607,7 @@ func (m ListModel) toggleDeleted(a api.Alias) tea.Cmd {
 }
 
 // forgetAlias permanently forgets the alias.
-func (m ListModel) forgetAlias(a api.Alias) tea.Cmd {
+func (m AliasListModel) forgetAlias(a api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
