@@ -24,6 +24,7 @@ type AppModel struct {
 type appOptions struct {
 	searchTerm string            // Pre-applied server-side search term for the alias list.
 	listFilter views.StateFilter // Default alias list view filter.
+	pageSize   int               // Aliases fetched per API request by the alias list.
 }
 
 // AppOption configures optional application startup state.
@@ -35,6 +36,10 @@ func WithSearch(searchTerm string) AppOption {
 
 func WithState(listFilter views.StateFilter) AppOption {
 	return func(o *appOptions) { o.listFilter = listFilter }
+}
+
+func WithPageSize(pageSize int) AppOption {
+	return func(o *appOptions) { o.pageSize = pageSize }
 }
 
 func NewAppModel(client *api.ClientWithResponses) AppModel {
@@ -49,7 +54,7 @@ func NewAppModelWithView(client *api.ClientWithResponses, activeView views.ViewI
 	return AppModel{
 		active: activeView,
 		views: map[views.ViewID]tea.Model{
-			views.ViewAliasList:        views.NewAliasListModel(client, o.searchTerm, o.listFilter),
+			views.ViewAliasList:        views.NewAliasListModel(client, o.searchTerm, o.listFilter, o.pageSize),
 			views.ViewAliasDetails:     views.NewAliasDetailsModel(client),
 			views.ViewAliasCreate:      views.NewAliasCreateModel(client),
 			views.ViewHelp:             views.NewHelpModel(),
@@ -58,7 +63,7 @@ func NewAppModelWithView(client *api.ClientWithResponses, activeView views.ViewI
 			// The alias list of one recipient gets its own model
 			// instance, so the recipient filter cannot leak into the
 			// plain alias list screen.
-			views.ViewRecipientAliases: views.NewAliasListModel(client, "", views.StateActiveInactive),
+			views.ViewRecipientAliases: views.NewAliasListModel(client, "", views.StateActiveInactive, o.pageSize),
 		},
 	}
 }

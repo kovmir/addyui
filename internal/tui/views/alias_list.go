@@ -15,8 +15,6 @@ import (
 
 // This file implements the TUI screen with the alias list.
 
-const pageSize = 100 // API max.
-
 // defaultTableHeight is used until the first WindowSizeMsg arrives.
 const defaultTableHeight = 24
 
@@ -121,6 +119,8 @@ type AliasListModel struct {
 	lastPage int // From the API's pagination meta; 0 until first load.
 	total    int // Total number of aliases matching the current filters.
 
+	pageSize int // Aliases fetched per API request; at most the API max (100).
+
 	pinFilter   pinFilter
 	stateFilter StateFilter
 
@@ -145,8 +145,10 @@ func (m *AliasListModel) updateTableSize() {
 	m.table.SetWidth(max(m.termWidth, 20))
 }
 
-// NewAliasListModel builds the alias list screen.
-func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, initialFilter StateFilter) AliasListModel {
+// NewAliasListModel builds the alias list screen. pageSize is the number
+// of aliases fetched per API request; it must be at most 100 (API max),
+// which config.Load enforces.
+func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, initialFilter StateFilter, pageSize int) AliasListModel {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "email or description"
 	searchInput.Prompt = "search: "
@@ -176,6 +178,7 @@ func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, in
 		loading:     true,
 		table:       t,
 		page:        1,
+		pageSize:    pageSize,
 		stateFilter: initialFilter,
 		pinFilter:   pinAll,
 		searchTerm:  initialSearch,
@@ -451,7 +454,7 @@ func (m AliasListModel) fetchAliases() tea.Cmd {
 			PageSize:   new(int),
 			PageNumber: new(int),
 		}
-		*params.PageSize = pageSize
+		*params.PageSize = m.pageSize
 		*params.PageNumber = m.page
 
 		switch m.pinFilter {

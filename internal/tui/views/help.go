@@ -19,7 +19,10 @@ RECIPIENT LIST    enter details · c create · space toggle active · x delete (
                   r refetch · esc back · q quit
 
 RECIPIENT DETAILS j/k interactive row · J/K scroll · space act on row · p/n prev/next recipient
-                  space on Aliases opens its alias list · esc back · q quit`
+                  space on Aliases opens its alias list · esc back · q quit
+
+ENV VARS          ADDY_API_KEY addy api key · ADDY_BASE_URL addy api base url
+                  ADDY_PAGE_SIZE how many aliases should be fetched in one api request`
 
 type HelpModel struct {
 	vp viewport.Model

@@ -61,3 +61,58 @@ func TestLoadMissingAPIKey(t *testing.T) {
 		t.Errorf("Load() = %+v on error, want the zero Config", cfg)
 	}
 }
+
+func TestLoadDefaultPageSize(t *testing.T) {
+	t.Setenv("ADDY_API_KEY", "secret")
+	t.Setenv("ADDY_BASE_URL", "")
+	t.Setenv("ADDY_PAGE_SIZE", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if cfg.PageSize != 100 {
+		t.Errorf("PageSize = %d, want the default 100", cfg.PageSize)
+	}
+}
+
+func TestLoadCustomPageSize(t *testing.T) {
+	t.Setenv("ADDY_API_KEY", "secret")
+	t.Setenv("ADDY_BASE_URL", "")
+	t.Setenv("ADDY_PAGE_SIZE", "25")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if cfg.PageSize != 25 {
+		t.Errorf("PageSize = %d, want 25", cfg.PageSize)
+	}
+}
+
+func TestLoadInvalidPageSize(t *testing.T) {
+	for name, value := range map[string]string{
+		"not a number": "abc",
+		"zero":         "0",
+		"negative":     "-5",
+		"above max":    "101",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ADDY_API_KEY", "secret")
+			t.Setenv("ADDY_BASE_URL", "")
+			t.Setenv("ADDY_PAGE_SIZE", value)
+
+			cfg, err := Load()
+			if err == nil {
+				t.Fatalf("Load() error = nil, want an error for ADDY_PAGE_SIZE=%q", value)
+			}
+			if !strings.Contains(err.Error(), "ADDY_PAGE_SIZE") {
+				t.Errorf("error = %q, want it to mention the variable", err.Error())
+			}
+			// A failed load must not return a half-filled config.
+			if cfg != (Config{}) {
+				t.Errorf("Load() = %+v on error, want the zero Config", cfg)
+			}
+		})
+	}
+}

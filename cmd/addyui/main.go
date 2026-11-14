@@ -53,7 +53,8 @@ func main() {
 	p := tea.NewProgram(
 		tui.NewAppModelWithView(client, startupView,
 			tui.WithSearch(strings.TrimSpace(*flagFind)),
-			tui.WithState(listFilter)))
+			tui.WithState(listFilter),
+			tui.WithPageSize(cfg.PageSize)))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "tui error:", err)
 		os.Exit(1)

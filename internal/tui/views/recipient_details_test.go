@@ -277,7 +277,7 @@ func TestAliasListForRecipientMsg(t *testing.T) {
 		mockaddy.WithRecipients(seedRecipients()),
 		mockaddy.WithAliases(seedRecipientAliases()))
 
-	m := NewAliasListModel(client, "", StateActiveInactive)
+	m := NewAliasListModel(client, "", StateActiveInactive, 100)
 	updated, cmd := m.Update(listForRecipientMsg{recipientID: "r1", email: "me@example.com"})
 	if cmd != nil {
 		t.Fatal("listForRecipientMsg must not return a command; Init() fetches")
