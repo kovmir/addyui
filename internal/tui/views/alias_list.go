@@ -420,7 +420,7 @@ func aliasRows(aliases []api.Alias) []table.Row {
 	for _, a := range aliases {
 		pin, act := " ", " "
 		if a.Pinned != nil && *a.Pinned {
-			pin = "^"
+			pin = "+"
 		}
 		if a.Active != nil && *a.Active {
 			act = "+"
