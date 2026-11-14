@@ -2,6 +2,8 @@ package views
 
 import (
 	"testing"
+
+	"github.com/kovmir/addyui/internal/mockaddy"
 )
 
 // newTestCreateModel returns a create screen with domain options
@@ -154,5 +156,29 @@ func TestCreateRecipientsSummaryKeepsRecipientOrder(t *testing.T) {
 	want := "first@example.com, second@example.com"
 	if got := m.recipientsSummary(); got != want {
 		t.Errorf("recipientsSummary() = %q, want %q (stable list order)", got, want)
+	}
+}
+
+func TestFetchDomains(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t)
+
+	msg := NewCreateModel(client).fetchDomains()() // run the tea.Cmd
+	opts, ok := msg.(createOptionsMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want createOptionsMsg", msg)
+	}
+	if opts.err != nil {
+		t.Fatalf("createOptionsMsg error = %v", opts.err)
+	}
+	if len(opts.domains) == 0 {
+		t.Fatal("createOptionsMsg has no domains")
+	}
+	if opts.defaultDomain != mockaddy.DefaultDomain {
+		t.Errorf("defaultDomain = %q, want %q", opts.defaultDomain, mockaddy.DefaultDomain)
+	}
+	if opts.defaultFormat != mockaddy.DefaultAliasFormat {
+		t.Errorf("defaultFormat = %q, want %q", opts.defaultFormat, mockaddy.DefaultAliasFormat)
 	}
 }

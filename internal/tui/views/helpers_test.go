@@ -5,11 +5,33 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"syscall"
 	"testing"
+
+	"github.com/kovmir/addyui/internal/api"
+	"github.com/kovmir/addyui/internal/mockaddy"
 )
+
+// startMockServer runs a fake addy.io API for the duration of the test.
+func startMockServer(t *testing.T, opts ...mockaddy.Option) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(mockaddy.New(opts...))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func newTestClient(t *testing.T, opts ...mockaddy.Option) *api.ClientWithResponses {
+	t.Helper()
+	srv := startMockServer(t, opts...)
+	client, err := api.New(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("api.New() error = %v", err)
+	}
+	return client
+}
 
 func TestStr(t *testing.T) {
 	t.Parallel()
