@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -190,6 +191,12 @@ func New(opts ...Option) *Server {
 	// Deactivate: DELETE /api/v1/active-aliases/{id}
 	mux.HandleFunc("DELETE /api/v1/active-aliases/{id}", s.deactivateAlias)
 
+	// Pin: POST /api/v1/pinned-aliases (the id travels in the body)
+	mux.HandleFunc("POST /api/v1/pinned-aliases", s.pinAlias)
+
+	// Unpin: DELETE /api/v1/pinned-aliases/{id}
+	mux.HandleFunc("DELETE /api/v1/pinned-aliases/{id}", s.unpinAlias)
+
 	// Verified recipients: GET /api/v1/recipients
 	mux.HandleFunc("GET /api/v1/recipients", s.listRecipients)
 
@@ -355,12 +362,14 @@ func demoRecipients() []Recipient {
 }
 
 // filterAliases applies the query-string filters the TUI sends: search
-// term, deleted-state, active-state and recipient.
+// term, deleted-state, active-state, pinned-state and recipient. Pinned
+// aliases are returned first, matching the real API's listing order.
 func (s *Server) filterAliases(r *http.Request) []Alias {
 	q := r.URL.Query()
 	search := q.Get("filter[search]")
 	deleted := q.Get("filter[deleted]") // "with", "only" or empty
 	active := q.Get("filter[active]")   // "true", "false" or empty
+	pinned := q.Get("filter[pinned]")   // "true", "false" or empty
 	recipient := q.Get("recipient")     // recipient ID or empty
 
 	s.mu.Lock()
@@ -385,11 +394,20 @@ func (s *Server) filterAliases(r *http.Request) []Alias {
 		if active == "false" && a.Active {
 			continue
 		}
+		if pinned == "true" && !a.Pinned {
+			continue
+		}
+		if pinned == "false" && a.Pinned {
+			continue
+		}
 		if recipient != "" && !aliasHasRecipient(a, recipient) {
 			continue
 		}
 		out = append(out, a)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Pinned && !out[j].Pinned
+	})
 	return out
 }
 
@@ -487,6 +505,46 @@ func (s *Server) deactivateAlias(w http.ResponseWriter, r *http.Request) {
 	for i := range s.aliases {
 		if s.aliases[i].ID == id {
 			s.aliases[i].Active = false
+			s.aliases[i].UpdatedAt = ts(0)
+			writeJSON(w, http.StatusNoContent, nil)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// pinAlias pins the alias named in the JSON body, answering 200 with
+// the updated alias. Pinned aliases sort first when listing.
+func (s *Server) pinAlias(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "missing alias id"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.aliases {
+		if s.aliases[i].ID == body.ID {
+			s.aliases[i].Pinned = true
+			s.aliases[i].UpdatedAt = ts(0)
+			writeJSON(w, http.StatusOK, singleResponse{Data: s.aliases[i]})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+}
+
+// unpinAlias unpins the alias named in the path, answering with the
+// empty 204 the API spec declares.
+func (s *Server) unpinAlias(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.aliases {
+		if s.aliases[i].ID == id {
+			s.aliases[i].Pinned = false
 			s.aliases[i].UpdatedAt = ts(0)
 			writeJSON(w, http.StatusNoContent, nil)
 			return

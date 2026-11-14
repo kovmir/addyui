@@ -398,6 +398,87 @@ func TestToggleActiveActivates(t *testing.T) {
 	}
 }
 
+func TestTogglePinPins(t *testing.T) {
+	t.Parallel()
+
+	id := "0e3f5228-c22a-4b7d-bc27-68c3d01e7b8d"
+	client := newTestClient(t, mockaddy.WithAliases([]mockaddy.Alias{
+		{ID: id, Email: "newsletter@demo.anonaddy.com", Domain: mockaddy.DefaultDomain,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+	}))
+
+	m := NewAliasDetailsModel(client)
+	m.aliases = []api.Alias{{Id: &id, Pinned: new(bool)}}
+	m.index = 0
+
+	msg := m.togglePin(&m.aliases[0])() // run the tea.Cmd
+	done, ok := msg.(aliasDetailsActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggle pin failed: %v", done.err)
+	}
+	if done.op != "toggled pin state" {
+		t.Errorf("op = %q, want \"toggled pin state\"", done.op)
+	}
+	if done.alias == nil || done.alias.Pinned == nil || !*done.alias.Pinned {
+		t.Errorf("refreshed alias is not pinned: %+v", done.alias)
+	}
+}
+
+func TestTogglePinUnpins(t *testing.T) {
+	t.Parallel()
+
+	id := "50c9e585-e7f5-41c4-9016-9014c15454bc"
+	client := newTestClient(t, mockaddy.WithAliases([]mockaddy.Alias{
+		{ID: id, Email: "github@demo.anonaddy.com", Domain: mockaddy.DefaultDomain,
+			Pinned: true, CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+	}))
+
+	m := NewAliasDetailsModel(client)
+	pinned := true
+	m.aliases = []api.Alias{{Id: &id, Pinned: &pinned}}
+	m.index = 0
+
+	msg := m.togglePin(&m.aliases[0])() // run the tea.Cmd
+	done, ok := msg.(aliasDetailsActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggle pin failed: %v", done.err)
+	}
+	if done.alias == nil || done.alias.Pinned == nil || *done.alias.Pinned {
+		t.Errorf("refreshed alias is still pinned: %+v", done.alias)
+	}
+}
+
+func TestTogglePinErrorSurfaces(t *testing.T) {
+	t.Parallel()
+
+	// The alias does not exist on the fake server, so the toggle must
+	// come back as an error message rather than a success.
+	id := "does-not-exist"
+	client := newTestClient(t)
+
+	m := NewAliasDetailsModel(client)
+	m.aliases = []api.Alias{{Id: &id, Pinned: new(bool)}}
+	m.index = 0
+
+	msg := m.togglePin(&m.aliases[0])() // run the tea.Cmd
+	done, ok := msg.(aliasDetailsActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", msg)
+	}
+	if done.err == nil {
+		t.Error("toggle of a missing alias must produce an error")
+	}
+	if done.alias != nil {
+		t.Errorf("a failed toggle must not carry an alias: %+v", done.alias)
+	}
+}
+
 func TestToggleActiveErrorSurfaces(t *testing.T) {
 	t.Parallel()
 
