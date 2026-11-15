@@ -16,13 +16,21 @@ type spyView struct {
 	id        views.ViewID
 	initCalls int
 	messages  []tea.Msg
+
+	// Commands the spy hands back, so tests can exercise how the root
+	// model tags view commands. Both default to nil.
+	updateCmd tea.Cmd // Returned by every Update call.
+	initCmd   tea.Cmd // Returned by Init.
 }
 
-func (s *spyView) Init() tea.Cmd { s.initCalls++; return nil }
+func (s *spyView) Init() tea.Cmd {
+	s.initCalls++
+	return s.initCmd
+}
 
 func (s *spyView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	s.messages = append(s.messages, msg)
-	return s, nil
+	return s, s.updateCmd
 }
 
 func (s *spyView) View() tea.View { return tea.NewView("") }
@@ -181,6 +189,153 @@ func TestAppModelBroadcastsWindowSize(t *testing.T) {
 	for id, s := range byID {
 		if len(s.messages) != 1 || s.messages[0] != msg {
 			t.Errorf("view %d received %v, want the window size message", id, s.messages)
+		}
+	}
+}
+
+// sentinelMsg is an arbitrary command result the routing tests tag and
+// deliver, to observe where commands end up.
+type sentinelMsg struct{ n int }
+
+// TestAppModelRoutesCommandResultsToIssuingView covers the core fix: a
+// command issued by one view must deliver its result to that view even
+// if the user switched to another view while it was in flight.
+func TestAppModelRoutesCommandResultsToIssuingView(t *testing.T) {
+	t.Parallel()
+
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
+	m, byID := newSpyApp(views.ViewAliasList, list, details)
+
+	// The list issues a command.
+	list.updateCmd = func() tea.Msg { return sentinelMsg{n: 1} }
+	model, cmd := m.Update(keyPress('r'))
+	if cmd == nil {
+		t.Fatal("command from the active view was dropped, want it wrapped")
+	}
+	tagged, ok := cmd().(views.ViewMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want views.ViewMsg", cmd())
+	}
+	if tagged.To != views.ViewAliasList {
+		t.Errorf("tagged.To = %d, want %d", tagged.To, views.ViewAliasList)
+	}
+
+	// Switch to the details view while the command is in flight.
+	model, _ = model.(AppModel).Update(views.SwitchViewMsg{To: views.ViewAliasDetails})
+	m = model.(AppModel)
+
+	// The result must reach the list, not the active details view.
+	m.Update(tagged)
+
+	got := byID[views.ViewAliasList].messages
+	if len(got) != 2 { // key press + command result
+		t.Fatalf("list received %d messages, want 2", len(got))
+	}
+	if got[1] != (sentinelMsg{n: 1}) {
+		t.Errorf("list received %v, want the command result", got[1])
+	}
+	if len(byID[views.ViewAliasDetails].messages) != 0 {
+		t.Errorf("details received %v, want nothing", byID[views.ViewAliasDetails].messages)
+	}
+}
+
+// TestAppModelInitCommandTaggedForActiveView checks that startup
+// commands are tagged too: a slow first fetch must not be lost when the
+// user switches views right after start.
+func TestAppModelInitCommandTaggedForActiveView(t *testing.T) {
+	t.Parallel()
+
+	list := &spyView{id: views.ViewAliasList,
+		initCmd: func() tea.Msg { return sentinelMsg{n: 1} }}
+	m, _ := newSpyApp(views.ViewAliasList, list)
+
+	cmd := m.Init()
+	if cmd == nil {
+		t.Fatal("Init returned no command, want the view's init command")
+	}
+	tagged, ok := cmd().(views.ViewMsg)
+	if !ok {
+		t.Fatalf("Init command produced %T, want views.ViewMsg", cmd())
+	}
+	if tagged.To != views.ViewAliasList || tagged.Msg != (sentinelMsg{n: 1}) {
+		t.Errorf("tagged = %+v, want the init command tagged for the list", tagged)
+	}
+}
+
+// TestAppModelSwitchViewTagsInitForNewView checks that the Init command
+// run on a view switch is tagged for the view switched to.
+func TestAppModelSwitchViewTagsInitForNewView(t *testing.T) {
+	t.Parallel()
+
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails,
+		initCmd: func() tea.Msg { return sentinelMsg{n: 2} }}
+	m, _ := newSpyApp(views.ViewAliasList, list, details)
+
+	// No payload: the returned batch reduces to the Init command alone.
+	_, cmd := m.Update(views.SwitchViewMsg{To: views.ViewAliasDetails})
+	tagged, ok := cmd().(views.ViewMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want views.ViewMsg", cmd())
+	}
+	if tagged.To != views.ViewAliasDetails || tagged.Msg != (sentinelMsg{n: 2}) {
+		t.Errorf("tagged = %+v, want the init command tagged for details", tagged)
+	}
+}
+
+// TestAppModelRootCommandsPassThroughTagging checks that navigation and
+// quit commands returned by views are not wrapped, so the root model
+// keeps handling them.
+func TestAppModelRootCommandsPassThroughTagging(t *testing.T) {
+	t.Parallel()
+
+	list := &spyView{id: views.ViewAliasList}
+	details := &spyView{id: views.ViewAliasDetails}
+	m, _ := newSpyApp(views.ViewAliasList, list, details)
+
+	list.updateCmd = views.SwitchView(views.ViewAliasDetails)
+	_, cmd := m.Update(keyPress('f'))
+	if msg := cmd(); msg != (views.SwitchViewMsg{To: views.ViewAliasDetails}) {
+		t.Fatalf("switch command produced %#v, want it unwrapped", msg)
+	}
+
+	list.updateCmd = tea.Quit
+	_, cmd = m.Update(keyPress('q'))
+	if msg := cmd(); msg != (tea.QuitMsg{}) {
+		t.Fatalf("quit command produced %#v, want tea.QuitMsg", msg)
+	}
+}
+
+// TestAppModelBatchCommandsStayTagged checks that commands a view
+// batches keep their tag (the create view batches two fetches in Init).
+func TestAppModelBatchCommandsStayTagged(t *testing.T) {
+	t.Parallel()
+
+	list := &spyView{id: views.ViewAliasList}
+	m, _ := newSpyApp(views.ViewAliasList, list)
+
+	list.updateCmd = tea.Batch(
+		func() tea.Msg { return sentinelMsg{n: 1} },
+		func() tea.Msg { return sentinelMsg{n: 2} },
+	)
+	_, cmd := m.Update(keyPress('r'))
+
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want tea.BatchMsg", cmd())
+	}
+	if len(batch) != 2 {
+		t.Fatalf("batch holds %d commands, want 2", len(batch))
+	}
+	for i, c := range batch {
+		tagged, ok := c().(views.ViewMsg)
+		if !ok {
+			t.Fatalf("batch command %d produced %T, want views.ViewMsg", i, c())
+		}
+		if tagged.To != views.ViewAliasList {
+			t.Errorf("batch command %d tagged for %d, want %d",
+				i, tagged.To, views.ViewAliasList)
 		}
 	}
 }

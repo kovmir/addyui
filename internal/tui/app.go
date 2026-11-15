@@ -72,7 +72,9 @@ func NewAppModelWithView(client *api.ClientWithResponses, activeView views.ViewI
 
 // Init renders only the currently active view.
 func (m AppModel) Init() tea.Cmd {
-	return m.views[m.active].Init()
+	// Tag the startup commands for the view, so their results reach it
+	// even if the user switches to another view before they finish.
+	return views.ForView(m.active, m.views[m.active].Init())
 }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -82,6 +84,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+	// Deliver a command result to the view that issued the command,
+	// even when another view became active in the meantime.
+	case views.ViewMsg:
+		return m.updateChild(msg.To, msg.Msg)
 	// Switch currently active view.
 	case views.SwitchViewMsg:
 		if msg.To != m.active {
@@ -92,8 +98,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Deliver the payload first...
 			var cmd tea.Cmd
 			m, cmd = m.updateChild(m.active, msg.With)
-			// ... then run the view's Init().
-			return m, tea.Batch(cmd, m.views[m.active].Init())
+			// ... then run the view's Init(). updateChild already
+			// tagged the payload command; tag Init the same way, so
+			// both results find the new view.
+			return m, tea.Batch(cmd, views.ForView(m.active, m.views[m.active].Init()))
 		}
 		return m, nil
 	// Return to the previous view.
@@ -122,14 +130,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.updateChild(m.active, msg)
 }
 
-// updateChild delivers the message to the child view.
+// updateChild delivers the message to the child view. Every command
+// the view returns is tagged for that view, so command results are
+// routed back to the view that issued them instead of to whichever
+// view is active when they arrive.
 func (m AppModel) updateChild(id views.ViewID, msg tea.Msg) (AppModel, tea.Cmd) {
 	if msg == nil {
 		return m, nil
 	}
 	updated, cmd := m.views[id].Update(msg)
 	m.views[id] = updated
-	return m, cmd
+	return m, views.ForView(id, cmd)
 }
 
 // View renders only the currently active view.
