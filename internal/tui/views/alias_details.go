@@ -266,8 +266,11 @@ func (m AliasDetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = msg.op
 		m.dirty = true
-		if msg.alias != nil {
-			m.aliases[m.index] = *msg.alias
+		for i := range m.aliases {
+			if msg.alias != nil && *m.aliases[i].Id == *msg.alias.Id {
+				m.aliases[i] = *msg.alias
+				break
+			}
 		}
 		m.syncRows()
 

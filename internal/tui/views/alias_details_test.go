@@ -3,6 +3,8 @@
 package views
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kovmir/addyui/internal/api"
@@ -504,4 +506,120 @@ func TestToggleActiveErrorSurfaces(t *testing.T) {
 	if done.alias != nil {
 		t.Errorf("a failed toggle must not carry an alias: %+v", done.alias)
 	}
+}
+
+func TestAliasDetailsDelayedActionDone(t *testing.T) {
+	t.Parallel()
+
+	idA := "50c9e585-e7f5-41c4-9016-9014c15454bc"
+	idB := "0e3f5228-c22a-4b7d-bc27-68c3d01e7b8d"
+	emailA := "github@demo.anonaddy.com"
+	emailB := "newsletter@demo.anonaddy.com"
+	client := newTestClient(t, mockaddy.WithAliases([]mockaddy.Alias{
+		{ID: idA, Email: emailA, Domain: mockaddy.DefaultDomain,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+		{ID: idB, Email: emailB, Domain: mockaddy.DefaultDomain,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+	}))
+
+	newModel := func() AliasDetailsModel {
+		m := NewAliasDetailsModel(client)
+		m.aliases = []api.Alias{
+			{Id: &idA, Email: &emailA, Pinned: new(bool)},
+			{Id: &idB, Email: &emailB, Pinned: new(bool)},
+		}
+		return m
+	}
+
+	// Both aliases start unpinned, so any pinning is a write-back.
+	checkSnapshot := func(t *testing.T, m AliasDetailsModel) {
+		t.Helper()
+		if got := str(m.aliases[0].Email); got != emailA {
+			t.Errorf("aliases[0].Email = %q, want %q", got, emailA)
+		}
+		if got := str(m.aliases[1].Email); got != emailB {
+			t.Errorf("aliases[1].Email = %q, want %q", got, emailB)
+		}
+		for i, a := range m.aliases {
+			if a.Pinned != nil && *a.Pinned {
+				t.Errorf("aliases[%d] is pinned, want the untouched snapshot", i)
+			}
+		}
+	}
+
+	t.Run("delayed response updates the alias by id", func(t *testing.T) {
+		t.Parallel()
+
+		// Pin alias A, but let the user navigate to alias B before the
+		// response arrives: the API work is deferred inside the
+		// command, so running it after the navigation simulates a
+		// delayed response. The refreshed alias must land in A's slot,
+		// not the one currently on screen.
+		m := newModel()
+		cmd := m.togglePin(&m.aliases[0])
+		m.move(+1) // the user pressed "n"
+
+		done, ok := cmd().(aliasDetailsActionDoneMsg)
+		if !ok {
+			t.Fatalf("command produced %T, want aliasDetailsActionDoneMsg", done)
+		}
+		if done.err != nil {
+			t.Fatalf("toggle pin failed: %v", done.err)
+		}
+
+		updated, _ := m.Update(done)
+		m = updated.(AliasDetailsModel)
+		if got := str(m.aliases[0].Email); got != emailA {
+			t.Errorf("aliases[0].Email = %q, want %q", got, emailA)
+		}
+		if m.aliases[0].Pinned == nil || !*m.aliases[0].Pinned {
+			t.Errorf("aliases[0] (id A) is not pinned after the delayed response")
+		}
+		if got := str(m.aliases[1].Email); got != emailB {
+			t.Errorf("aliases[1].Email = %q, want %q; the delayed response must not clobber the other slot", got, emailB)
+		}
+		if p := m.aliases[1].Pinned; p != nil && *p {
+			t.Errorf("aliases[1] is pinned, want the untouched snapshot")
+		}
+		// The table must still show the alias the user navigated to.
+		if view := m.View().Content; !strings.Contains(view, emailB) || strings.Contains(view, emailA) {
+			t.Errorf("view after the delayed response shows the wrong alias:\n%s", view)
+		}
+	})
+
+	t.Run("response for an unknown id leaves the snapshot untouched", func(t *testing.T) {
+		t.Parallel()
+
+		// The response carries an alias that is not on this page (for
+		// example the filter changed while the request was in flight);
+		// nothing in the snapshot may change.
+		m := newModel()
+		otherID := "9f2f1a0e-4b3a-4c2d-8e1f-0a1b2c3d4e5f"
+		otherEmail := "other@demo.anonaddy.com"
+		pinned := true
+		fresh := api.Alias{Id: &otherID, Email: &otherEmail, Pinned: &pinned}
+		updated, _ := m.Update(aliasDetailsActionDoneMsg{op: "toggled pin state", alias: &fresh})
+		m = updated.(AliasDetailsModel)
+
+		checkSnapshot(t, m)
+	})
+
+	t.Run("error response leaves the snapshot untouched", func(t *testing.T) {
+		t.Parallel()
+
+		m := newModel()
+		updated, _ := m.Update(aliasDetailsActionDoneMsg{
+			op:  "toggle pin",
+			err: errors.New("unexpected response: 500 Internal Server Error"),
+		})
+		m = updated.(AliasDetailsModel)
+
+		checkSnapshot(t, m)
+		if m.status != "toggle pin failed: unexpected response: 500 Internal Server Error" {
+			t.Errorf("status = %q, want the failure message", m.status)
+		}
+		if m.dirty {
+			t.Error("a failed action must not mark the snapshot dirty")
+		}
+	})
 }

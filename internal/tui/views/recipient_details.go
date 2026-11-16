@@ -148,8 +148,11 @@ func (m RecipientDetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = msg.op
 		m.dirty = true
-		if msg.recipient != nil {
-			m.recipients[m.index] = *msg.recipient
+		for i := range m.recipients {
+			if msg.recipient != nil && m.recipients[i].id == msg.recipient.id {
+				m.recipients[i] = *msg.recipient
+				break
+			}
 		}
 		m.syncRows()
 

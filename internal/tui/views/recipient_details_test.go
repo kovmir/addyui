@@ -4,6 +4,8 @@ package views
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kovmir/addyui/internal/mockaddy"
@@ -312,4 +314,114 @@ func TestAliasListForRecipientMsg(t *testing.T) {
 			t.Errorf("alias %s is not attached to r1", str(a.Email))
 		}
 	}
+}
+
+func TestRecipientDetailsDelayedActionDone(t *testing.T) {
+	t.Parallel()
+
+	id0 := fullTestRecipient().id
+	email0 := fullTestRecipient().email
+	id1 := "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+	email1 := "other@example.com"
+	client := newTestClient(t, mockaddy.WithRecipients([]mockaddy.Recipient{
+		{ID: id0, Email: email0, Active: true,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+		{ID: id1, Email: email1, Description: new("work"), Active: true,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+	}))
+
+	newModel := func() RecipientDetailsModel {
+		m := NewRecipientDetailsModel(client)
+		r0 := fullTestRecipient()
+		r1 := recipient{id: id1, email: email1, description: "work", active: true}
+		m.recipients = []recipient{r0, r1}
+		return m
+	}
+
+	checkSnapshot := func(t *testing.T, m RecipientDetailsModel) {
+		t.Helper()
+		if m.recipients[0] != fullTestRecipient() {
+			t.Errorf("recipients[0] = %+v, want the untouched snapshot", m.recipients[0])
+		}
+		if got := m.recipients[1].email; got != email1 {
+			t.Errorf("recipients[1].email = %q, want %q", got, email1)
+		}
+		if got := m.recipients[1].description; got != "work" {
+			t.Errorf("recipients[1].description = %q, want %q", got, "work")
+		}
+	}
+
+	t.Run("delayed response updates the recipient by id", func(t *testing.T) {
+		t.Parallel()
+
+		// Update r0's description, but let the user navigate to r1
+		// before the response arrives: the API work is deferred inside
+		// the command, so running it after the navigation simulates a
+		// delayed response. The refreshed recipient must land in r0's
+		// slot, not the one currently on screen.
+		m := newModel()
+		cmd := m.updateDescription("freshly updated")
+		m.move(+1) // the user pressed "n"
+
+		done, ok := cmd().(recipientDetailsActionDoneMsg)
+		if !ok {
+			t.Fatalf("command produced %T, want recipientDetailsActionDoneMsg", done)
+		}
+		if done.err != nil {
+			t.Fatalf("update description failed: %v", done.err)
+		}
+
+		updated, _ := m.Update(done)
+		m = updated.(RecipientDetailsModel)
+		if got := m.recipients[0].email; got != email0 {
+			t.Errorf("recipients[0].email = %q, want %q", got, email0)
+		}
+		if got := m.recipients[0].description; got != "freshly updated" {
+			t.Errorf("recipients[0].description = %q, want %q", got, "freshly updated")
+		}
+		if got := m.recipients[1].description; got != "work" {
+			t.Errorf("recipients[1].description = %q, want %q; the delayed response must not clobber the other slot", got, "work")
+		}
+		// The table must still show the recipient the user navigated to.
+		if view := m.View().Content; !strings.Contains(view, email1) || strings.Contains(view, email0) {
+			t.Errorf("view after the delayed response shows the wrong recipient:\n%s", view)
+		}
+	})
+
+	t.Run("response for an unknown id leaves the snapshot untouched", func(t *testing.T) {
+		t.Parallel()
+
+		// The response carries a recipient that is not on this page
+		// (for example the list was refetched while the request was
+		// in flight); nothing in the snapshot may change.
+		m := newModel()
+		other := recipient{
+			id:          "9f2f1a0e-4b3a-4c2d-8e1f-0a1b2c3d4e5f",
+			email:       "stranger@example.com",
+			description: "stranger",
+		}
+		updated, _ := m.Update(recipientDetailsActionDoneMsg{op: "updated description", recipient: &other})
+		m = updated.(RecipientDetailsModel)
+
+		checkSnapshot(t, m)
+	})
+
+	t.Run("error response leaves the snapshot untouched", func(t *testing.T) {
+		t.Parallel()
+
+		m := newModel()
+		updated, _ := m.Update(recipientDetailsActionDoneMsg{
+			op:  "update description",
+			err: errors.New("unexpected response: 500 Internal Server Error"),
+		})
+		m = updated.(RecipientDetailsModel)
+
+		checkSnapshot(t, m)
+		if m.status != "update description failed: unexpected response: 500 Internal Server Error" {
+			t.Errorf("status = %q, want the failure message", m.status)
+		}
+		if m.dirty {
+			t.Error("a failed action must not mark the snapshot dirty")
+		}
+	})
 }
