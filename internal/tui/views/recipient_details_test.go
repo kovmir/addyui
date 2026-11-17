@@ -132,7 +132,7 @@ func TestRecipientDetailsRefreshKeepsActive(t *testing.T) {
 			CreatedAt:       "2019-10-01 09:00:00", UpdatedAt: "2020-11-11 11:11:11",
 		}}))
 
-	msg := m.refreshMsg(context.Background(), id, "refreshed")
+	msg := m.refreshMsg(context.Background(), id, "refreshed", true)
 	done, ok := msg.(recipientDetailsActionDoneMsg)
 	if !ok {
 		t.Fatalf("refresh produced %T, want recipientDetailsActionDoneMsg", msg)
@@ -148,6 +148,64 @@ func TestRecipientDetailsRefreshKeepsActive(t *testing.T) {
 	}
 	if done.recipient.emailVerifiedAt != "2019-10-01 09:00:00" {
 		t.Errorf("emailVerifiedAt = %q, want the server value", done.recipient.emailVerifiedAt)
+	}
+}
+
+func TestRecipientDetailsRefreshCapturesActiveAtCreation(t *testing.T) {
+	t.Parallel()
+
+	// The active flag is captured when the command is created, not
+	// when it runs: the command goroutine must not read the model
+	// snapshot, which the main goroutine mutates while commands are
+	// in flight.
+	id0 := fullTestRecipient().id
+	id1 := "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+	client := newTestClient(t, mockaddy.WithRecipients([]mockaddy.Recipient{
+		{ID: id0, Email: fullTestRecipient().email,
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+		{ID: id1, Email: "other@example.com",
+			CreatedAt: "2026-01-01 00:00:00", UpdatedAt: "2026-01-01 00:00:00"},
+	}))
+	m := NewRecipientDetailsModel(client)
+	r0 := fullTestRecipient()                            // active: true
+	r1 := recipient{id: id1, email: "other@example.com"} // active: false
+	m.recipients = []recipient{r0, r1}
+
+	// Edit r0's description, then let a concurrent toggle's done msg
+	// flip r0's active flag in the shared snapshot before the
+	// description refresh runs: the refresh still carries the flag
+	// captured at creation time.
+	cmd := m.updateDescription("freshly updated")
+	toggled := r0
+	toggled.active = false
+	updated, _ := m.Update(recipientDetailsActionDoneMsg{
+		op:        "toggled active state",
+		recipient: &toggled,
+	})
+	m = updated.(RecipientDetailsModel)
+
+	done, ok := cmd().(recipientDetailsActionDoneMsg)
+	if !ok {
+		t.Fatalf("command produced %T, want recipientDetailsActionDoneMsg", done)
+	}
+	if done.err != nil {
+		t.Fatalf("update description failed: %v", done.err)
+	}
+	if !done.recipient.active {
+		t.Error("refresh must carry the active flag captured at command creation, not the shared snapshot's value at execution time")
+	}
+
+	updated, _ = m.Update(done)
+	m = updated.(RecipientDetailsModel)
+	if m.recipients[0].description != "freshly updated" {
+		t.Errorf("recipients[0].description = %q, want %q",
+			m.recipients[0].description, "freshly updated")
+	}
+	if !m.recipients[0].active {
+		t.Error("recipients[0].active = false, want true")
+	}
+	if m.recipients[1].active {
+		t.Error("recipients[1].active = true, want false; the refresh must not touch the other entry")
 	}
 }
 
@@ -175,6 +233,11 @@ func TestRecipientDetailsToggleActive(t *testing.T) {
 	}
 	if done.op != "toggled active state" {
 		t.Errorf("op = %q, want \"toggled active state\"", done.op)
+	}
+	updated, _ := m.Update(msg)
+	m = updated.(RecipientDetailsModel)
+	if m.recipients[0].active {
+		t.Errorf("toggle active failed: active = true, want false")
 	}
 }
 
