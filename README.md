@@ -15,7 +15,7 @@ Download from [release artifacts][release_artifacts] or build from source:
 ```sh
 git clone https://github.com/kovmir/addyui.git
 cd addyui
-make build install
+make install
 ```
 
 # USAGE
