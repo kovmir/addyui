@@ -5,11 +5,11 @@ LDFLAGS = -X main.version=$(VERSION)
 build:
 	$(GO) build -ldflags "$(LDFLAGS)" -o addyui ./cmd/addyui
 
+install:
+	$(GO) install -ldflags "$(LDFLAGS)" ./cmd/addyui
+
 mock:
 	$(GO) build -ldflags "$(LDFLAGS)" -o mockaddy ./cmd/mockaddy
-
-install:
-	$(GO) install ./cmd/addyui
 
 test:
 	$(GO) test -race ./...
