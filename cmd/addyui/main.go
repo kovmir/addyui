@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	flagNew     = flag.Bool("new", false, "Create a new alias")
-	flagFind    = flag.String("find", "", "Search term to filter the alias list at startup")
-	flagShowVer = flag.Bool("version", false, "Print the version and exit")
+	flagNew     = flag.Bool("n", false, "Create a new alias")
+	flagFind    = flag.String("f", "", "Search term to filter the alias list at startup")
+	flagShowVer = flag.Bool("v", false, "Print the version and exit")
 	version     = "dev" // set by goreleaser via ldflags
 )
 
