@@ -28,11 +28,11 @@ Never hand-edit `gen.go` beyond what regeneration produces.
 
 - `make build` — build the TUI binary.
 - `make test` — run all tests with `-race`.
-- `make vet` / `make fmt` — vet; list non-gofmt'd files.
+- `make vet` / `make fmt` — vet; format files in place with `gofmt -s`.
 - `make check` — test + vet; this is what CI runs, so run it before
   declaring work done.
 
-Formatting is plain `gofmt`. Tests use the standard library only
+Formatting is `gofmt -s`. Tests use the standard library only
 (`net/http/httptest` + `internal/mockaddy`), no external test
 frameworks or assertion libraries.
 

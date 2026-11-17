@@ -18,7 +18,8 @@ vet:
 	$(GO) vet ./...
 
 fmt:
-	gofmt -l .
+	@gofmt -s -l .
+	@gofmt -s -w .
 
 check: test vet
 
