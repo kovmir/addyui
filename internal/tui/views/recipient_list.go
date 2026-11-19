@@ -3,10 +3,8 @@
 package views
 
 import (
-	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/textinput"

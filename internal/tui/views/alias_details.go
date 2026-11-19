@@ -436,7 +436,7 @@ func (m *AliasDetailsModel) interact(row int) tea.Cmd {
 // updateDescription sends the new description to the API, then refreshes
 // the snapshot. Sending nothing when the value is unchanged avoids a
 // pointless request.
-func (m *AliasDetailsModel) updateDescription(description string) tea.Cmd {
+func (m AliasDetailsModel) updateDescription(description string) tea.Cmd {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return nil
 	}
@@ -462,7 +462,7 @@ func (m *AliasDetailsModel) updateDescription(description string) tea.Cmd {
 // toggleActive activates the alias if it is inactive, and vice versa.
 // A deleted alias cannot be activated; restoring it re-activates it
 // server-side, so space sends a restore only.
-func (m *AliasDetailsModel) toggleActive(a *api.Alias) tea.Cmd {
+func (m AliasDetailsModel) toggleActive(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -496,7 +496,7 @@ func (m *AliasDetailsModel) toggleActive(a *api.Alias) tea.Cmd {
 }
 
 // togglePin pins the alias if it is unpinned, and vice versa.
-func (m *AliasDetailsModel) togglePin(a *api.Alias) tea.Cmd {
+func (m AliasDetailsModel) togglePin(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -528,7 +528,7 @@ func (m *AliasDetailsModel) togglePin(a *api.Alias) tea.Cmd {
 
 // toggleDeleted restores the alias if it is deleted, and deletes it
 // otherwise. Deletion is soft: the alias can be restored later.
-func (m *AliasDetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
+func (m AliasDetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
 	id := str(a.Id)
 	if id == "" {
 		return nil
@@ -550,7 +550,7 @@ func (m *AliasDetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
 }
 
 // restoreCmd restores a deleted alias and refreshes the snapshot.
-func (m *AliasDetailsModel) restoreCmd(id, op string) tea.Cmd {
+func (m AliasDetailsModel) restoreCmd(id, op string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -566,7 +566,7 @@ func (m *AliasDetailsModel) restoreCmd(id, op string) tea.Cmd {
 
 // applyRecipients sends the picker's selection to the API, replacing
 // the alias's attached recipients, then refreshes the snapshot.
-func (m *AliasDetailsModel) applyRecipients() tea.Cmd {
+func (m AliasDetailsModel) applyRecipients() tea.Cmd {
 	if m.index < 0 || m.index >= len(m.aliases) {
 		return nil
 	}
@@ -599,7 +599,7 @@ func (m *AliasDetailsModel) applyRecipients() tea.Cmd {
 
 // refreshMsg fetches the alias and returns a aliasDetailsActionDoneMsg
 // carrying the fresh snapshot, so the table reflects the server state.
-func (m *AliasDetailsModel) refreshMsg(ctx context.Context, id, op string) tea.Msg {
+func (m AliasDetailsModel) refreshMsg(ctx context.Context, id, op string) tea.Msg {
 	resp, err := m.client.GetASpecificAliasWithResponse(ctx, id, &api.GetASpecificAliasParams{})
 	if err != nil {
 		return aliasDetailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %w", err)}

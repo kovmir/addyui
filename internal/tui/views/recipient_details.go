@@ -339,7 +339,7 @@ func (m *RecipientDetailsModel) interact(row int) tea.Cmd {
 // updateDescription sends the new description to the API, then
 // refreshes the snapshot. Sending nothing when the value is unchanged
 // avoids a pointless request.
-func (m *RecipientDetailsModel) updateDescription(description string) tea.Cmd {
+func (m RecipientDetailsModel) updateDescription(description string) tea.Cmd {
 	if m.index < 0 || m.index >= len(m.recipients) {
 		return nil
 	}
@@ -364,7 +364,7 @@ func (m *RecipientDetailsModel) updateDescription(description string) tea.Cmd {
 }
 
 // toggleActive activates the recipient if it is inactive, and vice versa.
-func (m *RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -384,7 +384,7 @@ func (m *RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
 }
 
 // resendVerification asks addy.io to resend the verification email.
-func (m *RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -406,7 +406,7 @@ func (m *RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
 
 // toggleReplySend allows the recipient to reply/send from the user's
 // aliases if disallowed, and vice versa.
-func (m *RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -438,7 +438,7 @@ func (m *RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
 }
 
 // toggleEncryption turns PGP encryption for the recipient on or off.
-func (m *RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -470,7 +470,7 @@ func (m *RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
 }
 
 // toggleInlineEncryption turns inline PGP encryption on or off.
-func (m *RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -503,7 +503,7 @@ func (m *RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
 
 // toggleProtectedHeaders turns hiding the subject in protected headers
 // on or off.
-func (m *RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -536,7 +536,7 @@ func (m *RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
 
 // toggleRemovePgpKeys turns stripping PGP keys from outgoing mail on or
 // off.
-func (m *RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -569,7 +569,7 @@ func (m *RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
 
 // toggleRemovePgpSignatures turns stripping PGP signatures from
 // outgoing mail on or off.
-func (m *RecipientDetailsModel) toggleRemovePgpSignatures(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) toggleRemovePgpSignatures(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" {
 		return nil
@@ -627,7 +627,7 @@ func (m *RecipientDetailsModel) addPublicKey(keyData string) tea.Cmd {
 }
 
 // removeKey deletes the recipient's PGP public key.
-func (m *RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
+func (m RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
 	id := r.id
 	if id == "" || r.fingerprint == "" {
 		return nil
@@ -650,7 +650,7 @@ func (m *RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
 // carrying the fresh snapshot, so the table reflects the server state. The
 // API's single-recipient endpoint does not return the active flag, so callers
 // pass the entry's own value, captured when the command was created.
-func (m *RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, active bool) tea.Msg {
+func (m RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, active bool) tea.Msg {
 	resp, err := m.client.GetASpecificRecipientWithResponse(ctx, id, &api.GetASpecificRecipientParams{})
 	if err != nil {
 		return recipientDetailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %w", err)}

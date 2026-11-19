@@ -54,3 +54,9 @@ commit one or write one into code, tests, or docs.
   together in `routing.go`; shared helpers in `helpers.go`.
 - User-facing keybindings must be reflected in the in-app help view
   (`help.go`, shown on `F1`).
+- Helper methods on view models use a pointer receiver iff they mutate
+  the model (e.g. `syncRows`, `refetch`). Read-only helpers and command
+  builders use value receivers so async `tea.Cmd` closures capture an
+  immutable snapshot of the model instead of a live pointer. The Elm
+  interface methods (`Init`, `Update`, `View`) always use value
+  receivers to satisfy the `tea.Model` interface.
