@@ -3,7 +3,10 @@
 package views
 
 import (
+	"fmt"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kovmir/addyui/internal/mockaddy"
 )
@@ -158,6 +161,51 @@ func TestCreateRecipientsSummaryKeepsRecipientOrder(t *testing.T) {
 	want := "first@example.com, second@example.com"
 	if got := m.recipientsSummary(); got != want {
 		t.Errorf("recipientsSummary() = %q, want %q (stable list order)", got, want)
+	}
+}
+
+func TestSubmitGuardsDoubleCreate(t *testing.T) {
+	t.Parallel()
+
+	// A second enter while the create request is in flight must be
+	// ignored, so pressing enter twice in quick succession does not
+	// create two aliases.
+	m := newTestCreateModel([]string{"a.com"})
+	m.submitting = true
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	got := next.(AliasCreateModel)
+	if cmd != nil {
+		t.Error("enter while submitting returned a command, want none")
+	}
+	if !got.submitting {
+		t.Error("enter while submitting cleared the submitting flag")
+	}
+}
+
+func TestSubmitSetsAndClearsSubmitting(t *testing.T) {
+	t.Parallel()
+
+	m := newTestCreateModel([]string{"a.com"})
+
+	// The first enter starts the request and sets the flag.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	got := next.(AliasCreateModel)
+	if cmd == nil {
+		t.Fatal("enter with a ready form returned no command")
+	}
+	if !got.submitting {
+		t.Error("enter did not set the submitting flag")
+	}
+
+	// A done message clears the flag again, so a failed create can be
+	// retried.
+	next, _ = got.Update(aliasCreateDoneMsg{err: fmt.Errorf("boom")})
+	got = next.(AliasCreateModel)
+	if got.submitting {
+		t.Error("aliasCreateDoneMsg did not clear the submitting flag")
+	}
+	if got.status == "" {
+		t.Error("failed create left no status message")
 	}
 }
 

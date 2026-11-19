@@ -83,9 +83,10 @@ type AliasCreateModel struct {
 	pickerOpen bool
 	editing    int // row being edited; -1 when none
 
-	loading bool
-	err     error
-	status  string
+	loading    bool
+	submitting bool // create request in flight; blocks re-submit
+	err        error
+	status     string
 }
 
 // NewAliasCreateModel builds the create screen. It stays idle until a
@@ -192,6 +193,7 @@ func (m AliasCreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncRows()
 
 	case aliasCreateDoneMsg:
+		m.submitting = false
 		if msg.err != nil {
 			m.status = fmt.Sprintf("create failed: %s", describeError(msg.err))
 			return m, nil
@@ -251,7 +253,12 @@ func (m AliasCreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "space":
 			return m, m.interact(m.table.Cursor())
 		case "enter":
+			if m.submitting {
+				return m, nil
+			}
 			if cmd := m.submit(); cmd != nil {
+				m.submitting = true
+				m.status = ""
 				return m, cmd
 			}
 		}
@@ -292,7 +299,9 @@ func (m AliasCreateModel) View() tea.View {
 	var b strings.Builder
 	b.WriteString(m.table.View())
 
-	if m.status != "" {
+	if m.submitting {
+		b.WriteString("\n\nCreating alias...")
+	} else if m.status != "" {
 		fmt.Fprintf(&b, "\n\n%s", m.status)
 	}
 	if m.err != nil {
