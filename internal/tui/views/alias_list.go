@@ -79,6 +79,7 @@ type aliasesLoadedMsg struct {
 	lastPage int
 	total    int
 	err      error
+	seq      int
 }
 
 // actionDoneMsg carries the result of a mutating API call (activate,
@@ -137,6 +138,8 @@ type AliasListModel struct {
 	// The user must hit the forget key twice in a row to forget an alias.
 	forgetArm  bool   // Has the use pressed the forget key once?
 	forgetName string // Alias email shown in the forget confirmation prompt.
+
+	fetchSeq int // Incremented on every fetch dispatch; stale responses are dropped.
 }
 
 // updateTableSize resizes the table to fit the terminal, accounting for
@@ -185,6 +188,7 @@ func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, in
 		pinFilter:   pinAll,
 		searchTerm:  initialSearch,
 		searchInput: searchInput,
+		fetchSeq:    0,
 	}
 }
 
@@ -212,7 +216,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateTableSize()
 				m.table.SetCursor(0)
 				m.page = 1 // A new search starts from the first page.
-				return m, m.fetchAliases()
+				return m, m.refetch()
 			case "esc":
 				m.searching = false
 				m.searchInput.SetValue(m.searchTerm) // Restore the applied term.
@@ -252,14 +256,14 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.page < m.lastPage {
 				m.page++
 				m.table.SetCursor(0)
-				return m, m.fetchAliases()
+				return m, m.refetch()
 			}
 		// Previous API alias page.
 		case "left", "h":
 			if m.page > 1 {
 				m.page--
 				m.table.SetCursor(0)
-				return m, m.fetchAliases()
+				return m, m.refetch()
 			}
 		// Toggle alias itself.
 		case "space":
@@ -294,7 +298,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			m.pinFilter = (m.pinFilter + 1) % 3
 			m.page = 1
-			return m, m.fetchAliases()
+			return m, m.refetch()
 		// Cycle view filter.
 		case "v":
 			for i, f := range cycleOrder {
@@ -304,10 +308,10 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.page = 1
-			return m, m.fetchAliases()
+			return m, m.refetch()
 		// Refetch aliases.
 		case "r":
-			return m, m.fetchAliases()
+			return m, m.refetch()
 		// Alias API search.
 		case "/":
 			m.searching = true
@@ -328,6 +332,9 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTableSize()
 
 	case aliasesLoadedMsg:
+		if msg.seq != m.fetchSeq {
+			return m, nil
+		}
 		m.loading = false
 		m.err = msg.err
 		m.forgetArm = false
@@ -347,7 +354,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listRefreshMsg:
 		m.table.SetCursor(msg.index)
-		return m, m.fetchAliases()
+		return m, m.refetch()
 
 	case listForRecipientMsg:
 		// Init() runs right after this message and kicks off the
@@ -363,7 +370,7 @@ func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.status = msg.op
-		return m, m.fetchAliases() // Refetch aliases after actions.
+		return m, m.refetch() // Refetch aliases after actions.
 	}
 	return m, nil
 }
@@ -500,12 +507,12 @@ func (m AliasListModel) fetchAliases() tea.Cmd {
 
 		resp, err := m.client.GetAllAliasesWithResponse(ctx, params)
 		if err != nil {
-			return aliasesLoadedMsg{err: fmt.Errorf("request failed: %w", err)}
+			return aliasesLoadedMsg{err: fmt.Errorf("request failed: %w", err), seq: m.fetchSeq}
 		}
 		if resp.JSON200 == nil || resp.JSON200.Data == nil {
-			return aliasesLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
+			return aliasesLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status()), seq: m.fetchSeq}
 		}
-		msg := aliasesLoadedMsg{aliases: *resp.JSON200.Data, page: m.page}
+		msg := aliasesLoadedMsg{aliases: *resp.JSON200.Data, page: m.page, seq: m.fetchSeq}
 		if meta := resp.JSON200.Meta; meta != nil {
 			if meta.LastPage != nil {
 				msg.lastPage = *meta.LastPage
@@ -516,6 +523,11 @@ func (m AliasListModel) fetchAliases() tea.Cmd {
 		}
 		return msg
 	}
+}
+
+func (m *AliasListModel) refetch() tea.Cmd {
+	m.fetchSeq++
+	return m.fetchAliases()
 }
 
 // toggleActive activates the alias if it is inactive, and vice versa.

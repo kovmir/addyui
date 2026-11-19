@@ -47,6 +47,7 @@ func (f verifiedFilter) label() string {
 type recipientsListLoadedMsg struct {
 	recipients []recipient
 	err        error
+	seq        int // Incremented on every fetch dispatch; stale responses are dropped.
 }
 
 // recipientActionDoneMsg carries the result of a mutating API call made
@@ -84,6 +85,8 @@ type RecipientListModel struct {
 	// recipient.
 	deleteArm  bool   // Has the user pressed the delete key once?
 	deleteName string // Recipient email shown in the confirmation prompt.
+
+	fetchSeq int
 }
 
 // updateTableSize resizes the table to fit the terminal, accounting for
@@ -124,6 +127,7 @@ func NewRecipientListModel(client *api.ClientWithResponses) RecipientListModel {
 		loading:    true,
 		table:      t,
 		emailInput: emailInput,
+		fetchSeq:   0,
 	}
 }
 
@@ -210,10 +214,10 @@ func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Cycle verified filter.
 		case "f":
 			m.verifiedFilter = (m.verifiedFilter + 1) % 3
-			return m, m.fetchRecipients()
+			return m, m.refetch()
 		// Refetch recipients.
 		case "r":
-			return m, m.fetchRecipients()
+			return m, m.refetch()
 		}
 		// The rest is consumed by the table...
 		var cmd tea.Cmd
@@ -226,6 +230,9 @@ func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTableSize()
 
 	case recipientsListLoadedMsg:
+		if msg.seq != m.fetchSeq {
+			return m, nil
+		}
 		m.loading = false
 		m.err = msg.err
 		m.deleteArm = false
@@ -233,7 +240,7 @@ func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetRows(recipientRows(msg.recipients))
 
 	case recipientsListRefreshMsg:
-		return m, m.fetchRecipients()
+		return m, m.refetch()
 
 	case recipientActionDoneMsg:
 		if msg.err != nil {
@@ -241,7 +248,7 @@ func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.status = msg.op
-		return m, m.fetchRecipients() // Refetch after actions.
+		return m, m.refetch() // Refetch after actions.
 	}
 	return m, nil
 }
@@ -340,12 +347,12 @@ func (m RecipientListModel) fetchRecipients() tea.Cmd {
 
 		resp, err := m.client.GetAllRecipientsWithResponse(ctx, params)
 		if err != nil {
-			return recipientsListLoadedMsg{err: fmt.Errorf("request failed: %w", err)}
+			return recipientsListLoadedMsg{err: fmt.Errorf("request failed: %w", err), seq: m.fetchSeq}
 		}
 		if resp.JSON200 == nil || resp.JSON200.Data == nil {
-			return recipientsListLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
+			return recipientsListLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status()), seq: m.fetchSeq}
 		}
-		msg := recipientsListLoadedMsg{}
+		msg := recipientsListLoadedMsg{seq: m.fetchSeq}
 		for _, r := range *resp.JSON200.Data {
 			msg.recipients = append(msg.recipients, recipient{
 				id:              str(r.Id),
@@ -358,6 +365,11 @@ func (m RecipientListModel) fetchRecipients() tea.Cmd {
 		}
 		return msg
 	}
+}
+
+func (m *RecipientListModel) refetch() tea.Cmd {
+	m.fetchSeq++
+	return m.fetchRecipients()
 }
 
 // createRecipient adds a new recipient email address.
