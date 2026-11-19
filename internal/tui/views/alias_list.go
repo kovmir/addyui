@@ -548,20 +548,7 @@ func (m AliasListModel) toggleActive(a api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if activate {
-			var resp *api.ActivateASpecificAliasResponse
-			resp, err = m.client.ActivateASpecificAliasWithResponse(ctx,
-				&api.ActivateASpecificAliasParams{},
-				api.ActivateASpecificAliasJSONRequestBody{Id: id})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.DeactivateASpecificAliasResponse
-			resp, err = m.client.DeactivateASpecificAliasWithResponse(ctx, id,
-				&api.DeactivateASpecificAliasParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setAliasActive(ctx, m.client, id, activate); err != nil {
 			return actionDoneMsg{op: "toggle active", err: err}
 		}
 		return actionDoneMsg{op: "toggled active state"}
@@ -579,20 +566,7 @@ func (m AliasListModel) togglePin(a api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if pin {
-			var resp *api.PinASpecificAliasResponse
-			resp, err = m.client.PinASpecificAliasWithResponse(ctx,
-				&api.PinASpecificAliasParams{},
-				api.PinASpecificAliasJSONRequestBody{Id: id})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.UnpinASpecificAliasResponse
-			resp, err = m.client.UnpinASpecificAliasWithResponse(ctx, id,
-				&api.UnpinASpecificAliasParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setAliasPin(ctx, m.client, id, pin); err != nil {
 			return actionDoneMsg{op: "toggle pin", err: err}
 		}
 		return actionDoneMsg{op: "toggled pin state"}
@@ -610,19 +584,7 @@ func (m AliasListModel) toggleDeleted(a api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if restore {
-			var resp *api.RestoreASpecificDeletedAliasResponse
-			resp, err = m.client.RestoreASpecificDeletedAliasWithResponse(ctx, id,
-				&api.RestoreASpecificDeletedAliasParams{})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.DeleteASpecificAliasResponse
-			resp, err = m.client.DeleteASpecificAliasWithResponse(ctx, id,
-				&api.DeleteASpecificAliasParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setAliasDeleted(ctx, m.client, id, !restore); err != nil {
 			return actionDoneMsg{op: "toggle deleted", err: err}
 		}
 		if restore {

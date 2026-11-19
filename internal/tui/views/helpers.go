@@ -17,6 +17,10 @@ import (
 
 const apiTimeout = 15 * time.Second
 
+// fieldColWidth is the width of the field-name column in the
+// two-column property tables.
+const fieldColWidth = 12
+
 func apiContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), apiTimeout)
 }

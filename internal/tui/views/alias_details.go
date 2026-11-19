@@ -15,97 +15,7 @@ import (
 	"github.com/kovmir/addyui/internal/api"
 )
 
-// This file implements the TUI screen with the alias details, plus the
-// recipient helpers the details screen needs (the recipients picker and
-// the "Recipients" summary row).
-
-// verifiedRecipientsLoadedMsg carries the result of the verified
-// recipients fetch used to fill the details screen's recipients picker.
-type verifiedRecipientsLoadedMsg struct {
-	recipients []recipient
-	err        error
-}
-
-// fetchVerifiedRecipients fetches the verified recipients mail can be forwarded to.
-func fetchVerifiedRecipients(client *api.ClientWithResponses) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		verified := "true" // Only verified recipients can receive mail.
-		noAliasCount := "false"
-		params := &api.GetAllRecipientsParams{
-			FilterVerified:   &verified,
-			FilterAliasCount: &noAliasCount,
-		}
-
-		resp, err := client.GetAllRecipientsWithResponse(ctx, params)
-		if err != nil {
-			return verifiedRecipientsLoadedMsg{err: fmt.Errorf("request failed: %w", err)}
-		}
-		if resp.JSON200 == nil {
-			return verifiedRecipientsLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
-		}
-		msg := verifiedRecipientsLoadedMsg{}
-		if data := resp.JSON200.Data; data != nil {
-			for _, r := range *data {
-				msg.recipients = append(msg.recipients, recipient{
-					id:    str(r.Id),
-					email: str(r.Email),
-				})
-			}
-		}
-		return msg
-	}
-}
-
-// aliasRecipients extracts the recipients attached to an alias.
-// The generated Alias type declares Recipients as an untyped []interface{};
-// the API actually returns recipient objects with id and email fields.
-func aliasRecipients(a *api.Alias) []recipient {
-	if a.Recipients == nil {
-		return nil
-	}
-	var out []recipient
-	for _, item := range *a.Recipients {
-		obj, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		r := recipient{}
-		if id, ok := obj["id"].(string); ok {
-			r.id = id
-		}
-		if email, ok := obj["email"].(string); ok {
-			r.email = email
-		}
-		if r.id != "" || r.email != "" {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// recipientSummary renders recipient emails for a table VALUE column.
-func recipientSummary(emails []string) string {
-	var names []string
-	width := 0
-	for _, email := range emails {
-		names = append(names, email)
-		width += len(email) + 2
-		if width > 40 {
-			// Truncate long lists.
-			return strings.Join(names, ", ") + "..."
-		}
-	}
-	if len(names) == 0 {
-		return "-" // No recipients.
-	}
-	return strings.Join(names, ", ")
-}
-
-// fieldColWidth is the width of the field-name column.
-const fieldColWidth = 12
+// This file implements the TUI screen with the alias details.
 
 // Row indices of the details table fields;
 // they match the table rows built by detailsRows.
@@ -475,20 +385,7 @@ func (m AliasDetailsModel) toggleActive(a *api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if activate {
-			var resp *api.ActivateASpecificAliasResponse
-			resp, err = m.client.ActivateASpecificAliasWithResponse(ctx,
-				&api.ActivateASpecificAliasParams{},
-				api.ActivateASpecificAliasJSONRequestBody{Id: id})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.DeactivateASpecificAliasResponse
-			resp, err = m.client.DeactivateASpecificAliasWithResponse(ctx, id,
-				&api.DeactivateASpecificAliasParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setAliasActive(ctx, m.client, id, activate); err != nil {
 			return aliasDetailsActionDoneMsg{op: "toggle active", err: err}
 		}
 		return m.refreshMsg(ctx, id, "toggled active state")
@@ -506,20 +403,7 @@ func (m AliasDetailsModel) togglePin(a *api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		var err error
-		if pin {
-			var resp *api.PinASpecificAliasResponse
-			resp, err = m.client.PinASpecificAliasWithResponse(ctx,
-				&api.PinASpecificAliasParams{},
-				api.PinASpecificAliasJSONRequestBody{Id: id})
-			err = apiError(err, resp)
-		} else {
-			var resp *api.UnpinASpecificAliasResponse
-			resp, err = m.client.UnpinASpecificAliasWithResponse(ctx, id,
-				&api.UnpinASpecificAliasParams{})
-			err = apiError(err, resp)
-		}
-		if err != nil {
+		if err := setAliasPin(ctx, m.client, id, pin); err != nil {
 			return aliasDetailsActionDoneMsg{op: "toggle pin", err: err}
 		}
 		return m.refreshMsg(ctx, id, "toggled pin state")
@@ -540,9 +424,7 @@ func (m AliasDetailsModel) toggleDeleted(a *api.Alias) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		resp, err := m.client.DeleteASpecificAliasWithResponse(ctx, id,
-			&api.DeleteASpecificAliasParams{})
-		if err = apiError(err, resp); err != nil {
+		if err := setAliasDeleted(ctx, m.client, id, true); err != nil {
 			return aliasDetailsActionDoneMsg{op: "delete alias", err: err}
 		}
 		return m.refreshMsg(ctx, id, "deleted alias")
@@ -555,9 +437,7 @@ func (m AliasDetailsModel) restoreCmd(id, op string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		resp, err := m.client.RestoreASpecificDeletedAliasWithResponse(ctx, id,
-			&api.RestoreASpecificDeletedAliasParams{})
-		if err = apiError(err, resp); err != nil {
+		if err := setAliasDeleted(ctx, m.client, id, false); err != nil {
 			return aliasDetailsActionDoneMsg{op: op, err: err}
 		}
 		return m.refreshMsg(ctx, id, op)
