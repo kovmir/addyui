@@ -47,9 +47,13 @@ type recipientSelectedMsg struct {
 // recipientDetailsActionDoneMsg carries the result of a mutating API
 // call made from the recipient details screen, plus the refreshed
 // recipient on success so the snapshot stays in sync with the server.
+// active is set only when the operation itself changed the active flag
+// (the single-recipient GET does not return it); every other operation
+// leaves it nil, and the update handler keeps the model's current value.
 type recipientDetailsActionDoneMsg struct {
 	op        string
 	recipient *recipient // fresh recipient from the API; nil on error
+	active    *bool      // authoritative active value when the op changed it
 	err       error
 }
 
@@ -149,7 +153,17 @@ func (m RecipientDetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dirty = true
 		for i := range m.recipients {
 			if m.recipients[i].id == msg.recipient.id {
-				m.recipients[i] = *msg.recipient
+				fresh := *msg.recipient
+				if msg.active != nil {
+					fresh.active = *msg.active
+				} else {
+					// The GET lacks the active flag; keep the model's
+					// current belief instead of a value captured when
+					// the command was created, which may be stale if
+					// another operation toggled active in the meantime.
+					fresh.active = m.recipients[i].active
+				}
+				m.recipients[i] = fresh
 				break
 			}
 		}
@@ -348,7 +362,6 @@ func (m RecipientDetailsModel) updateDescription(description string) tea.Cmd {
 		return nil
 	}
 	id := r.id
-	active := r.active
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
 		defer cancel()
@@ -359,7 +372,7 @@ func (m RecipientDetailsModel) updateDescription(description string) tea.Cmd {
 		if err = apiError(err, resp); err != nil {
 			return recipientDetailsActionDoneMsg{op: "update description", err: err}
 		}
-		return m.refreshMsg(ctx, id, "updated description", active)
+		return m.refreshMsg(ctx, id, "updated description", nil)
 	}
 }
 
@@ -379,7 +392,7 @@ func (m RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
 		}
 		// The single-recipient response does not include the active
 		// flag, so pass the toggled value explicitly.
-		return m.refreshMsg(ctx, id, "toggled active state", active)
+		return m.refreshMsg(ctx, id, "toggled active state", &active)
 	}
 }
 
@@ -389,7 +402,6 @@ func (m RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
 		defer cancel()
@@ -400,7 +412,7 @@ func (m RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
 		if err = apiError(err, resp); err != nil {
 			return recipientDetailsActionDoneMsg{op: "resend verification", err: err}
 		}
-		return m.refreshMsg(ctx, id, "verification email sent", active)
+		return m.refreshMsg(ctx, id, "verification email sent", nil)
 	}
 }
 
@@ -411,7 +423,6 @@ func (m RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	allow := !r.canReplySend
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -433,7 +444,7 @@ func (m RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle reply/send", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled reply/send", active)
+		return m.refreshMsg(ctx, id, "toggled reply/send", nil)
 	}
 }
 
@@ -443,7 +454,6 @@ func (m RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	enable := !r.shouldEncrypt
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -465,7 +475,7 @@ func (m RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle encryption", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled encryption", active)
+		return m.refreshMsg(ctx, id, "toggled encryption", nil)
 	}
 }
 
@@ -475,7 +485,6 @@ func (m RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	enable := !r.inlineEncryption
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -497,7 +506,7 @@ func (m RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle inline encryption", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled inline encryption", active)
+		return m.refreshMsg(ctx, id, "toggled inline encryption", nil)
 	}
 }
 
@@ -508,7 +517,6 @@ func (m RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	enable := !r.protectedHeaders
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -530,7 +538,7 @@ func (m RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle protected headers", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled protected headers", active)
+		return m.refreshMsg(ctx, id, "toggled protected headers", nil)
 	}
 }
 
@@ -541,7 +549,6 @@ func (m RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	enable := !r.removePgpKeys
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -563,7 +570,7 @@ func (m RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle remove PGP keys", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled remove PGP keys", active)
+		return m.refreshMsg(ctx, id, "toggled remove PGP keys", nil)
 	}
 }
 
@@ -574,7 +581,6 @@ func (m RecipientDetailsModel) toggleRemovePgpSignatures(r *recipient) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	active := r.active
 	enable := !r.removePgpSignatures
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -596,7 +602,7 @@ func (m RecipientDetailsModel) toggleRemovePgpSignatures(r *recipient) tea.Cmd {
 		if err != nil {
 			return recipientDetailsActionDoneMsg{op: "toggle remove PGP signatures", err: err}
 		}
-		return m.refreshMsg(ctx, id, "toggled remove PGP signatures", active)
+		return m.refreshMsg(ctx, id, "toggled remove PGP signatures", nil)
 	}
 }
 
@@ -610,7 +616,6 @@ func (m *RecipientDetailsModel) addPublicKey(keyData string) tea.Cmd {
 		m.keyEditor.SetValue("")
 		return nil
 	}
-	active := m.recipients[m.index].active
 	m.keyEditor.SetValue("")
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
@@ -622,7 +627,7 @@ func (m *RecipientDetailsModel) addPublicKey(keyData string) tea.Cmd {
 		if err = apiError(err, resp); err != nil {
 			return recipientDetailsActionDoneMsg{op: "add public key", err: err}
 		}
-		return m.refreshMsg(ctx, id, "public key added", active)
+		return m.refreshMsg(ctx, id, "public key added", nil)
 	}
 }
 
@@ -632,7 +637,6 @@ func (m RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
 	if id == "" || r.fingerprint == "" {
 		return nil
 	}
-	active := r.active
 	return func() tea.Msg {
 		ctx, cancel := apiContext()
 		defer cancel()
@@ -642,15 +646,16 @@ func (m RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
 		if err = apiError(err, resp); err != nil {
 			return recipientDetailsActionDoneMsg{op: "remove public key", err: err}
 		}
-		return m.refreshMsg(ctx, id, "public key removed", active)
+		return m.refreshMsg(ctx, id, "public key removed", nil)
 	}
 }
 
 // refreshMsg fetches the recipient and returns a recipientDetailsActionDoneMsg
 // carrying the fresh snapshot, so the table reflects the server state. The
 // API's single-recipient endpoint does not return the active flag, so callers
-// pass the entry's own value, captured when the command was created.
-func (m RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, active bool) tea.Msg {
+// whose operation changed it pass the authoritative value; the others pass
+// nil and the update handler keeps the model's current one.
+func (m RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, active *bool) tea.Msg {
 	resp, err := m.client.GetASpecificRecipientWithResponse(ctx, id, &api.GetASpecificRecipientParams{})
 	if err != nil {
 		return recipientDetailsActionDoneMsg{op: op, err: fmt.Errorf("refresh failed: %w", err)}
@@ -664,7 +669,6 @@ func (m RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, ac
 		id:                  str(data.Id),
 		email:               str(data.Email),
 		description:         str(data.Description),
-		active:              active,
 		emailVerifiedAt:     str(data.EmailVerifiedAt),
 		aliasesCount:        intVal(data.AliasesCount),
 		canReplySend:        data.CanReplySend != nil && *data.CanReplySend,
@@ -677,7 +681,7 @@ func (m RecipientDetailsModel) refreshMsg(ctx context.Context, id, op string, ac
 		createdAt:           str(data.CreatedAt),
 		updatedAt:           str(data.UpdatedAt),
 	}
-	return recipientDetailsActionDoneMsg{op: op, recipient: &r}
+	return recipientDetailsActionDoneMsg{op: op, recipient: &r, active: active}
 }
 
 // syncRows refreshes the table rows after the recipient snapshot

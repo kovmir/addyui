@@ -122,8 +122,8 @@ func TestRecipientDetailsRefreshKeepsActive(t *testing.T) {
 	t.Parallel()
 
 	// The API's single-recipient endpoint does not return the active
-	// flag, so the refresh must keep the snapshot's value instead of
-	// resetting it to false.
+	// flag, so the refresh msg carries no authoritative value and the
+	// model must keep the snapshot's value instead of resetting it.
 	id := fullTestRecipient().id
 	m := detailsRecipientModel(t,
 		mockaddy.WithRecipients([]mockaddy.Recipient{{
@@ -132,7 +132,7 @@ func TestRecipientDetailsRefreshKeepsActive(t *testing.T) {
 			CreatedAt:       "2019-10-01 09:00:00", UpdatedAt: "2020-11-11 11:11:11",
 		}}))
 
-	msg := m.refreshMsg(context.Background(), id, "refreshed", true)
+	msg := m.refreshMsg(context.Background(), id, "refreshed", nil)
 	done, ok := msg.(recipientDetailsActionDoneMsg)
 	if !ok {
 		t.Fatalf("refresh produced %T, want recipientDetailsActionDoneMsg", msg)
@@ -143,21 +143,30 @@ func TestRecipientDetailsRefreshKeepsActive(t *testing.T) {
 	if done.recipient == nil {
 		t.Fatal("refresh must carry the refreshed recipient")
 	}
-	if !done.recipient.active {
-		t.Error("refresh reset the active flag, want it kept from the snapshot")
+	if done.active != nil {
+		t.Error("a refresh of an op that did not change active must not carry an authoritative value")
 	}
 	if done.recipient.emailVerifiedAt != "2019-10-01 09:00:00" {
 		t.Errorf("emailVerifiedAt = %q, want the server value", done.recipient.emailVerifiedAt)
 	}
+
+	// Applying the msg keeps the model's active flag.
+	updated, _ := m.Update(done)
+	m = updated.(RecipientDetailsModel)
+	if !m.recipients[0].active {
+		t.Error("recipients[0].active = false, want the snapshot's true")
+	}
 }
 
-func TestRecipientDetailsRefreshCapturesActiveAtCreation(t *testing.T) {
+func TestRecipientDetailsRefreshDoesNotClobberActive(t *testing.T) {
 	t.Parallel()
 
-	// The active flag is captured when the command is created, not
-	// when it runs: the command goroutine must not read the model
-	// snapshot, which the main goroutine mutates while commands are
-	// in flight.
+	// The refresh must not carry an active value captured when the
+	// command was created: if a concurrent toggle's done msg updates
+	// the snapshot while the refresh is in flight, applying the
+	// refresh afterwards would overwrite the toggled flag with a
+	// stale value. The model keeps its current value instead, so the
+	// final state is correct in both arrival orders.
 	id0 := fullTestRecipient().id
 	id1 := "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
 	client := newTestClient(t, mockaddy.WithRecipients([]mockaddy.Recipient{
@@ -171,17 +180,19 @@ func TestRecipientDetailsRefreshCapturesActiveAtCreation(t *testing.T) {
 	r1 := recipient{id: id1, email: "other@example.com"} // active: false
 	m.recipients = []recipient{r0, r1}
 
-	// Edit r0's description, then let a concurrent toggle's done msg
-	// flip r0's active flag in the shared snapshot before the
-	// description refresh runs: the refresh still carries the flag
-	// captured at creation time.
+	// Edit r0's description, and let a concurrent active toggle's
+	// done msg flip r0's active flag in the shared snapshot before
+	// the description refresh lands.
 	cmd := m.updateDescription("freshly updated")
+	falsy := false
 	toggled := r0
 	toggled.active = false
-	updated, _ := m.Update(recipientDetailsActionDoneMsg{
+	toggleDone := recipientDetailsActionDoneMsg{
 		op:        "toggled active state",
 		recipient: &toggled,
-	})
+		active:    &falsy,
+	}
+	updated, _ := m.Update(toggleDone)
 	m = updated.(RecipientDetailsModel)
 
 	done, ok := cmd().(recipientDetailsActionDoneMsg)
@@ -191,8 +202,8 @@ func TestRecipientDetailsRefreshCapturesActiveAtCreation(t *testing.T) {
 	if done.err != nil {
 		t.Fatalf("update description failed: %v", done.err)
 	}
-	if !done.recipient.active {
-		t.Error("refresh must carry the active flag captured at command creation, not the shared snapshot's value at execution time")
+	if done.active != nil {
+		t.Error("updating the description must not carry an authoritative active value")
 	}
 
 	updated, _ = m.Update(done)
@@ -201,8 +212,8 @@ func TestRecipientDetailsRefreshCapturesActiveAtCreation(t *testing.T) {
 		t.Errorf("recipients[0].description = %q, want %q",
 			m.recipients[0].description, "freshly updated")
 	}
-	if !m.recipients[0].active {
-		t.Error("recipients[0].active = false, want true")
+	if m.recipients[0].active {
+		t.Error("recipients[0].active = true, want false; the refresh must keep the value the concurrent toggle set")
 	}
 	if m.recipients[1].active {
 		t.Error("recipients[1].active = true, want false; the refresh must not touch the other entry")
@@ -233,6 +244,9 @@ func TestRecipientDetailsToggleActive(t *testing.T) {
 	}
 	if done.op != "toggled active state" {
 		t.Errorf("op = %q, want \"toggled active state\"", done.op)
+	}
+	if done.active == nil || *done.active {
+		t.Error("toggle active must carry the authoritative toggled value (false)")
 	}
 	updated, _ := m.Update(msg)
 	m = updated.(RecipientDetailsModel)
