@@ -129,13 +129,20 @@ func NewRecipientListModel(client *api.ClientWithResponses) RecipientListModel {
 	}
 }
 
+// recipientsFetchKickMsg routes the fetch through Update: Init works on
+// a throwaway value copy, so only Update can increment fetchSeq on the
+// model that gets stored. Incrementing in Init would drop the result.
+type recipientsFetchKickMsg struct{}
+
 func (m RecipientListModel) Init() tea.Cmd {
-	// Kick off the first fetch.
-	return m.fetchRecipients()
+	return func() tea.Msg { return recipientsFetchKickMsg{} }
 }
 
 func (m RecipientListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case recipientsFetchKickMsg:
+		return m, m.refetch()
+
 	case tea.KeyPressMsg:
 		// Any key other than "x" cancels a pending delete confirmation,
 		// so deleting requires two "x" presses in a row.

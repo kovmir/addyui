@@ -192,13 +192,20 @@ func NewAliasListModel(client *api.ClientWithResponses, initialSearch string, in
 	}
 }
 
+// aliasesFetchKickMsg routes the fetch through Update: Init works on a
+// throwaway value copy, so only Update can increment fetchSeq on the
+// model that gets stored. Incrementing in Init would drop the result.
+type aliasesFetchKickMsg struct{}
+
 func (m AliasListModel) Init() tea.Cmd {
-	// Kick off the first fetch.
-	return m.fetchAliases()
+	return func() tea.Msg { return aliasesFetchKickMsg{} }
 }
 
 func (m AliasListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case aliasesFetchKickMsg:
+		return m, m.refetch()
+
 	case tea.KeyPressMsg:
 		// Any key other than "x" cancels a pending forget confirmation,
 		// so forgetting requires two "x" presses in a row.
