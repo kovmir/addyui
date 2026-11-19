@@ -8,7 +8,8 @@ addy.io built with Bubble Tea v2.
 - `cmd/addyui/` — the TUI binary entry point.
 - `cmd/mockaddy/` — standalone binary serving a fake addy.io API.
 - `internal/tui/` — application model; `views/` holds one file per screen
-  (alias list/details, recipient list/details, create, help, routing).
+  (alias list/details, recipient list/details, create, help, routing);
+  `recipient.go` holds the recipient type shared by the recipient screens.
 - `internal/api/` — addy.io API client.
 - `internal/config/` — configuration from flags/environment.
 - `internal/mockaddy/` — in-memory fake API server shared by the demo
@@ -41,7 +42,7 @@ frameworks or assertion libraries.
 Do not make requests to the real addy.io service. Use the fake server:
 
 - In tests: `httptest.NewServer(mockaddy.New(...))` with `With*` options.
-- Manually: `go run ./cmd/mockaddy`, then
+- Manually: `make mock` (or `go run ./cmd/mockaddy`), then
   `ADDY_BASE_URL=http://127.0.0.1:18099 ADDY_API_KEY=demo ./addyui`.
 
 `ADDY_API_KEY` is a real credential if set in the environment; never
