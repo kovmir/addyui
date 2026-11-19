@@ -136,7 +136,8 @@ func NewAliasCreateModel(client *api.ClientWithResponses) AliasCreateModel {
 }
 
 func (m AliasCreateModel) Init() tea.Cmd {
-	return tea.Batch(m.fetchDomains(), fetchVerifiedRecipients(m.client))
+	// No aliasID: this fetch is not bound to one alias.
+	return tea.Batch(m.fetchDomains(), fetchVerifiedRecipients(m.client, ""))
 }
 
 func (m AliasCreateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

@@ -330,10 +330,13 @@ func TestFetchVerifiedRecipients(t *testing.T) {
 		{ID: "r2", Email: "b@example.com", EmailVerifiedAt: new("2026-01-01 00:00:00")},
 	}))
 
-	msg := fetchVerifiedRecipients(client)() // run the tea.Cmd
+	msg := fetchVerifiedRecipients(client, "50c9e585-e7f5-41c4-9016-9014c15454bc")() // run the tea.Cmd
 	loaded, ok := msg.(verifiedRecipientsLoadedMsg)
 	if !ok {
 		t.Fatalf("command produced %T, want verifiedRecipientsLoadedMsg", msg)
+	}
+	if loaded.aliasID != "50c9e585-e7f5-41c4-9016-9014c15454bc" {
+		t.Errorf("aliasID = %q, want the requested alias's id", loaded.aliasID)
 	}
 	if loaded.err != nil {
 		t.Fatalf("recipientsLoadedMsg error = %v", loaded.err)
@@ -344,6 +347,98 @@ func TestFetchVerifiedRecipients(t *testing.T) {
 	if loaded.recipients[0].id != "r1" || loaded.recipients[0].email != "a@example.com" {
 		t.Errorf("recipients[0] = %+v, want {r1 a@example.com}", loaded.recipients[0])
 	}
+}
+
+func TestAliasDetailsDelayedVerifiedRecipients(t *testing.T) {
+	t.Parallel()
+
+	idA := "50c9e585-e7f5-41c4-9016-9014c15454bc"
+	idB := "0e3f5228-c22a-4b7d-bc27-68c3d01e7b8d"
+	emailA := "github@demo.anonaddy.com"
+	emailB := "newsletter@demo.anonaddy.com"
+	client := newTestClient(t, mockaddy.WithRecipients([]mockaddy.Recipient{
+		{ID: "r1", Email: "a@example.com", EmailVerifiedAt: new("2026-01-01 00:00:00")},
+		{ID: "r2", Email: "b@example.com", EmailVerifiedAt: new("2026-01-01 00:00:00")},
+	}))
+
+	newModel := func() AliasDetailsModel {
+		m := NewAliasDetailsModel(client)
+		m.aliases = []api.Alias{
+			{Id: &idA, Email: &emailA},
+			{Id: &idB, Email: &emailB},
+		}
+		return m
+	}
+
+	// Request the picker for alias A, but let the user navigate to
+	// alias B before the response arrives: the API work is deferred
+	// inside the command, so running it after the navigation simulates
+	// a delayed response.
+	loadForA := func(t *testing.T) verifiedRecipientsLoadedMsg {
+		t.Helper()
+		msg := fetchVerifiedRecipients(client, idA)()
+		loaded, ok := msg.(verifiedRecipientsLoadedMsg)
+		if !ok {
+			t.Fatalf("command produced %T, want verifiedRecipientsLoadedMsg", msg)
+		}
+		return loaded
+	}
+
+	t.Run("stale response for another alias does not open the picker", func(t *testing.T) {
+		t.Parallel()
+
+		m := newModel()
+		loaded := loadForA(t)
+		m.move(+1) // the user pressed "n"
+
+		updated, _ := m.Update(loaded)
+		m = updated.(AliasDetailsModel)
+		if m.recipientsIsEditing {
+			t.Error("picker opened over the wrong alias from a stale response")
+		}
+		if len(m.recipientsAvail) != 0 {
+			t.Errorf("recipientsAvail = %d entries, want none applied", len(m.recipientsAvail))
+		}
+		if view := m.View().Content; strings.Contains(view, "a@example.com") {
+			t.Errorf("picker rows leaked into the view:\n%s", view)
+		}
+	})
+
+	t.Run("stale response for another alias does not report its error", func(t *testing.T) {
+		t.Parallel()
+
+		m := newModel()
+		staleErr := verifiedRecipientsLoadedMsg{aliasID: idA, err: errors.New("boom")}
+		m.move(+1) // the user pressed "n"
+
+		updated, _ := m.Update(staleErr)
+		m = updated.(AliasDetailsModel)
+		if m.status != "" {
+			t.Errorf("status = %q, want empty; a stale error must not paint onto the current alias", m.status)
+		}
+	})
+
+	t.Run("response for the current alias opens the picker", func(t *testing.T) {
+		t.Parallel()
+
+		m := newModel()
+		loaded := loadForA(t)
+
+		updated, _ := m.Update(loaded)
+		m = updated.(AliasDetailsModel)
+		if !m.recipientsIsEditing {
+			t.Fatal("picker did not open for a response matching the current alias")
+		}
+		if len(m.recipientsAvail) != 2 {
+			t.Fatalf("recipientsAvail = %d entries, want 2", len(m.recipientsAvail))
+		}
+		// The alias has no attached recipients, so none are pre-checked.
+		for _, r := range m.recipientsAvail {
+			if m.recipientsSel[r.id] {
+				t.Errorf("recipient %s is pre-checked, want an empty selection", r.id)
+			}
+		}
+	})
 }
 
 func TestToggleActiveDeactivates(t *testing.T) {

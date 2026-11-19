@@ -150,11 +150,17 @@ func (m AliasDetailsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetCursor(0)
 
 	case verifiedRecipientsLoadedMsg:
-		if msg.err != nil {
-			m.status = fmt.Sprintf("load recipients failed: %s", describeError(msg.err))
+		// Drop responses requested for another alias: the user may
+		// have stepped to a neighboring alias (p/n) or re-entered the
+		// screen since the fetch started. Checked before the error
+		// branch, so a late failure does not paint a status onto the
+		// wrong alias either.
+		if m.index < 0 || m.index >= len(m.aliases) ||
+			msg.aliasID != str(m.aliases[m.index].Id) {
 			return m, nil
 		}
-		if m.index < 0 || m.index >= len(m.aliases) {
+		if msg.err != nil {
+			m.status = fmt.Sprintf("load recipients failed: %s", describeError(msg.err))
 			return m, nil
 		}
 		m.recipientsAvail = msg.recipients
@@ -335,8 +341,9 @@ func (m *AliasDetailsModel) interact(row int) tea.Cmd {
 		return m.togglePin(a)
 	case detailsRowRecipients:
 		// The picker needs the verified recipients; the alias's own
-		// attached recipients come from the snapshot.
-		return fetchVerifiedRecipients(m.client)
+		// attached recipients come from the snapshot. The alias ID is
+		// carried on the result so a stale response can be dropped.
+		return fetchVerifiedRecipients(m.client, str(a.Id))
 	case detailsRowDeleted:
 		return m.toggleDeleted(a)
 	}

@@ -17,14 +17,21 @@ import (
 
 // verifiedRecipientsLoadedMsg carries the result of the verified
 // recipients fetch used to fill the recipients picker on the alias
-// screens.
+// screens. aliasID is the alias the fetch was requested for; it is
+// empty when the fetch is not bound to an alias (create screen).
+// Receivers drop responses whose aliasID no longer matches, because
+// the user may have moved to another alias while the fetch was in
+// flight.
 type verifiedRecipientsLoadedMsg struct {
+	aliasID    string
 	recipients []recipient
 	err        error
 }
 
-// fetchVerifiedRecipients fetches the verified recipients mail can be forwarded to.
-func fetchVerifiedRecipients(client *api.ClientWithResponses) tea.Cmd {
+// fetchVerifiedRecipients fetches the verified recipients mail can be
+// forwarded to. aliasID is carried on the result so the receiver can
+// drop stale responses for an alias it no longer shows.
+func fetchVerifiedRecipients(client *api.ClientWithResponses, aliasID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -38,12 +45,12 @@ func fetchVerifiedRecipients(client *api.ClientWithResponses) tea.Cmd {
 
 		resp, err := client.GetAllRecipientsWithResponse(ctx, params)
 		if err != nil {
-			return verifiedRecipientsLoadedMsg{err: fmt.Errorf("request failed: %w", err)}
+			return verifiedRecipientsLoadedMsg{aliasID: aliasID, err: fmt.Errorf("request failed: %w", err)}
 		}
 		if resp.JSON200 == nil {
-			return verifiedRecipientsLoadedMsg{err: fmt.Errorf("unexpected response: %s", resp.Status())}
+			return verifiedRecipientsLoadedMsg{aliasID: aliasID, err: fmt.Errorf("unexpected response: %s", resp.Status())}
 		}
-		msg := verifiedRecipientsLoadedMsg{}
+		msg := verifiedRecipientsLoadedMsg{aliasID: aliasID}
 		if data := resp.JSON200.Data; data != nil {
 			for _, r := range *data {
 				msg.recipients = append(msg.recipients, recipient{
