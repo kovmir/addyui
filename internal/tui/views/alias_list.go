@@ -458,7 +458,7 @@ func aliasRows(aliases []api.Alias) []table.Row {
 // current pin and state filters.
 func (m AliasListModel) fetchAliases() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		params := &api.GetAllAliasesParams{

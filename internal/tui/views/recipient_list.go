@@ -326,7 +326,7 @@ func recipientRows(recipients []recipient) []table.Row {
 // verified filter.
 func (m RecipientListModel) fetchRecipients() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		// The alias counts power the ALIASES column.
@@ -375,7 +375,7 @@ func (m *RecipientListModel) refetch() tea.Cmd {
 // createRecipient adds a new recipient email address.
 func (m RecipientListModel) createRecipient(email string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.CreateNewRecipientWithResponse(ctx,
@@ -395,7 +395,7 @@ func (m RecipientListModel) toggleActive(r recipient) tea.Cmd {
 	}
 	active := !r.active
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		if err := setRecipientActive(ctx, m.client, r.id, active); err != nil {
@@ -411,7 +411,7 @@ func (m RecipientListModel) deleteRecipient(r recipient) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.DeleteASpecificRecipientWithResponse(ctx, r.id,

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/textinput"
@@ -351,7 +350,7 @@ func (m *RecipientDetailsModel) updateDescription(description string) tea.Cmd {
 	id := r.id
 	active := r.active
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.UpdateASpecificRecipientWithResponse(ctx, id,
@@ -372,7 +371,7 @@ func (m *RecipientDetailsModel) toggleActive(r *recipient) tea.Cmd {
 	}
 	active := !r.active
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		if err := setRecipientActive(ctx, m.client, id, active); err != nil {
@@ -392,7 +391,7 @@ func (m *RecipientDetailsModel) resendVerification(r *recipient) tea.Cmd {
 	}
 	active := r.active
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.ResendTheVerificationEmailForARecipientWithResponse(ctx,
@@ -415,7 +414,7 @@ func (m *RecipientDetailsModel) toggleReplySend(r *recipient) tea.Cmd {
 	active := r.active
 	allow := !r.canReplySend
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -447,7 +446,7 @@ func (m *RecipientDetailsModel) toggleEncryption(r *recipient) tea.Cmd {
 	active := r.active
 	enable := !r.shouldEncrypt
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -479,7 +478,7 @@ func (m *RecipientDetailsModel) toggleInlineEncryption(r *recipient) tea.Cmd {
 	active := r.active
 	enable := !r.inlineEncryption
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -512,7 +511,7 @@ func (m *RecipientDetailsModel) toggleProtectedHeaders(r *recipient) tea.Cmd {
 	active := r.active
 	enable := !r.protectedHeaders
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -545,7 +544,7 @@ func (m *RecipientDetailsModel) toggleRemovePgpKeys(r *recipient) tea.Cmd {
 	active := r.active
 	enable := !r.removePgpKeys
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -578,7 +577,7 @@ func (m *RecipientDetailsModel) toggleRemovePgpSignatures(r *recipient) tea.Cmd 
 	active := r.active
 	enable := !r.removePgpSignatures
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		var err error
@@ -614,7 +613,7 @@ func (m *RecipientDetailsModel) addPublicKey(keyData string) tea.Cmd {
 	active := m.recipients[m.index].active
 	m.keyEditor.SetValue("")
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.AddPublicKeyForASpecificRecipientWithResponse(ctx, id,
@@ -635,7 +634,7 @@ func (m *RecipientDetailsModel) removeKey(r *recipient) tea.Cmd {
 	}
 	active := r.active
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := apiContext()
 		defer cancel()
 
 		resp, err := m.client.RemovePublicKeyForASpecificRecipientWithResponse(ctx, id,

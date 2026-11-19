@@ -9,10 +9,17 @@ import (
 	"net"
 	"net/url"
 	"syscall"
+	"time"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/lipgloss/v2"
 )
+
+const apiTimeout = 15 * time.Second
+
+func apiContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), apiTimeout)
+}
 
 // tableStyles returns the app-wide table style: bubbles' defaults, but
 // with the selected row rendered as reversed fg/bg instead of pink.
